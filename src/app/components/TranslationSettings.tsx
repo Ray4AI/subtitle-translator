@@ -26,6 +26,8 @@ import {
   LLM_RELAY_BASE,
   isValidRelayBase,
   supportsGlossary,
+  validateExtraBody,
+  MAX_EXTRA_BODY_CHARS,
   type ReasoningEffort,
 } from "@/app/lib/translation";
 import { translationCache } from "@/app/lib/storage/indexedDBStorage";
@@ -84,6 +86,9 @@ const ServiceSettingsForm = ({ service }: { service: string }) => {
   const urlKind = classifyEndpointUrl(service, config?.url as string | undefined).kind;
   // 空 = 用内置中转,不算错;非空但不合法(漏 https://、javascript: 等)才标红。
   const relayBaseInvalid = relayBase.trim() !== "" && !isValidRelayBase(relayBase);
+  // 额外请求体:非法 JSON 当场标红。判据与翻译前校验、wire 合并共用
+  // validateExtraBody —— 三处入口同一份,界面绿灯 ⇔ 发得出去。
+  const extraBodyError = validateExtraBody(config?.extraBody);
 
   // Thinking-effort visibility: per-model gate via `models[].thinking: true`
   // in registry. State stored per-model in `config.thinkingEffort[sku]` where
@@ -595,7 +600,7 @@ const ServiceSettingsForm = ({ service }: { service: string }) => {
       )}
 
       {/* ========== Model group ========== */}
-      {(config?.model !== undefined || config?.temperature !== undefined || (isLLMModel && config?.maxTokens !== undefined) || showThinkingControl || config?.domains !== undefined || config?.sendSystemPrompt !== undefined) && (
+      {(config?.model !== undefined || config?.temperature !== undefined || (isLLMModel && config?.maxTokens !== undefined) || showThinkingControl || config?.domains !== undefined || config?.sendSystemPrompt !== undefined || config?.extraBody !== undefined) && (
         <Section variant="neutral" style={{ marginTop: 16 }} noGap>
           <Text strong style={{ display: "block", marginBottom: 8 }}>
             {t("modelGroup")}
@@ -751,6 +756,33 @@ const ServiceSettingsForm = ({ service }: { service: string }) => {
             {config?.sendSystemPrompt !== undefined && (
               <Form.Item label={t("sendSystemPrompt")} htmlFor={`${service}-sendSystemPrompt`} extra={t("sendSystemPromptExtra")} style={{ marginBottom: 0 }}>
                 <Switch id={`${service}-sendSystemPrompt`} checked={config?.sendSystemPrompt !== false} onChange={(checked) => handleConfigChange(service, "sendSystemPrompt", checked)} aria-label={t("sendSystemPrompt")} />
+              </Form.Item>
+            )}
+            {/* 额外请求体(textarea)—— 只给 LLM 服务。判据是 registry 有没有给它
+                发这个字段(config?.extraBody !== undefined),与 CLI / 引擎完全同源。
+                用户的 JSON 合并时压在最后,会【盖过】内置字段(含思考参数)——
+                这正是它的用途:各家关闭思考的参数名千奇百怪,我们无法穷举建模。
+                ⚠ 存的是【原始文本】不是解析后的对象:半成品(打到一半的
+                `{ "enable_thinking": fals`)必须能留在框里,不然用户每敲一个字符
+                就被倒回一次。解析/校验推迟到发请求那一刻。 */}
+            {config?.extraBody !== undefined && (
+              <Form.Item
+                label={t("extraBody")}
+                // 红框 + 具体原因。为空不报错(空 = 不用这个功能)。
+                extra={extraBodyError ?? t("extraBodyExtra")}
+                validateStatus={extraBodyError ? "error" : undefined}
+                style={{ marginBottom: 0 }}>
+                <TextArea
+                  value={config.extraBody}
+                  onChange={(e) => handleConfigChange(service, "extraBody", e.target.value)}
+                  placeholder={t("extraBodyPlaceholder")}
+                  autoSize={{ minRows: 2, maxRows: 8 }}
+                  maxLength={MAX_EXTRA_BODY_CHARS}
+                  spellCheck={false}
+                  // 等宽字体:JSON 的对齐就是它的可读性,而且能一眼看出缺了哪个引号。
+                  style={{ fontFamily: "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }}
+                  aria-label={t("extraBody")}
+                />
               </Form.Item>
             )}
           </Form>

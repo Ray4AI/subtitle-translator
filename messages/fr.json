@@ -219,7 +219,8 @@
     "errorHintRelay403": "L'API a renvoyé 403 Forbidden — activez « Relais API » dans « Plus de paramètres Provider »",
     "errorHintCors": "Impossible de joindre cette adresse — vérifiez l'adresse et que le service autorise les requêtes cross-origin (CORS). Les passerelles auto-hébergées et les modèles locaux doivent l'activer eux-mêmes, ou utilisez votre propre relais API",
     "errorHintGeminiKey": "Impossible de joindre Gemini : vérifiez d'abord votre réseau (certains réseaux ne peuvent pas atteindre directement les services Google). Si le réseau fonctionne, Google rejette depuis le 19 juin 2026 les clés API sans restriction — régénérez votre clé dans AI Studio (restreinte par défaut) ou ajoutez une restriction Gemini API à l'ancienne clé dans la console Google Cloud",
-    "rateLimitCooldown": "Limite de requêtes atteinte — courte pause, nouvelle tentative automatique"
+    "rateLimitCooldown": "Limite de requêtes atteinte — courte pause, nouvelle tentative automatique",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "Téléchargez des sous-titres ou collez le contenu. Sélectionnez la langue cible pour une traduction rapide. Supporte le traitement par lot et conserve la chronologie.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "Tous les services LLM partagent ces prompts ; changer de service ne les réinitialisera pas",
     "credentialsGroup": "Identifiants",
     "modelGroup": "Modèle",
-    "callParamsGroup": "Paramètres d'appel"
+    "callParamsGroup": "Paramètres d'appel",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

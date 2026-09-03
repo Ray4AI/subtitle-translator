@@ -219,7 +219,8 @@
     "errorHintRelay403": "API trả về 403 Forbidden — hãy bật \"Chuyển tiếp API\" trong \"Thêm cài đặt Provider\"",
     "errorHintCors": "Không thể kết nối tới địa chỉ này — hãy kiểm tra địa chỉ và xem dịch vụ có cho phép yêu cầu khác nguồn (CORS) hay không. Cổng tự dựng và mô hình cục bộ phải tự bật, hoặc dùng Chuyển tiếp API của riêng bạn",
     "errorHintGeminiKey": "Không thể kết nối Gemini: hãy kiểm tra mạng trước (một số mạng không thể truy cập trực tiếp dịch vụ Google). Nếu mạng bình thường, từ 19/06/2026 Google từ chối các API key không giới hạn — hãy tạo lại key trong AI Studio (mặc định đã giới hạn) hoặc thêm giới hạn Gemini API cho key cũ trong Google Cloud Console",
-    "rateLimitCooldown": "Đạt giới hạn yêu cầu — tạm dừng một lát rồi tự động thử lại"
+    "rateLimitCooldown": "Đạt giới hạn yêu cầu — tạm dừng một lát rồi tự động thử lại",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "Tải lên phụ đề hoặc dán nội dung. Chọn ngôn ngữ đích để dịch nhanh. Hỗ trợ xử lý hàng loạt và giữ nguyên dòng thời gian.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "Tất cả dịch vụ LLM dùng chung bộ prompt này; chuyển dịch vụ sẽ không đặt lại chúng",
     "credentialsGroup": "Thông tin xác thực",
     "modelGroup": "Mô hình",
-    "callParamsGroup": "Tham số gọi"
+    "callParamsGroup": "Tham số gọi",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

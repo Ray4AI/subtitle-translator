@@ -219,7 +219,8 @@
     "errorHintRelay403": "API mengembalikan 403 Forbidden — aktifkan \"Relay API\" di \"Pengaturan Provider lain\"",
     "errorHintCors": "Tidak dapat terhubung ke alamat ini — periksa alamatnya dan pastikan layanan mengizinkan permintaan lintas-asal (CORS). Gateway mandiri dan model lokal harus mengaktifkannya sendiri, atau gunakan Relay API milik Anda",
     "errorHintGeminiKey": "Tidak dapat terhubung ke Gemini: periksa jaringan Anda terlebih dahulu (beberapa jaringan tidak dapat mengakses layanan Google secara langsung). Jika jaringan baik-baik saja, sejak 19 Juni 2026 Google menolak kunci API tanpa pembatasan — buat ulang kunci di AI Studio (dibatasi secara default) atau tambahkan pembatasan Gemini API pada kunci lama di Google Cloud Console",
-    "rateLimitCooldown": "Batas permintaan tercapai — jeda sejenak, akan dicoba ulang otomatis"
+    "rateLimitCooldown": "Batas permintaan tercapai — jeda sejenak, akan dicoba ulang otomatis",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "Unggah subtitle atau tempel konten. Pilih bahasa target untuk terjemahan cepat. Mendukung pemrosesan batch dan mempertahankan timeline.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "Semua layanan LLM berbagi prompt ini; berpindah layanan tidak akan mereset-nya",
     "credentialsGroup": "Kredensial",
     "modelGroup": "Model",
-    "callParamsGroup": "Parameter Panggilan"
+    "callParamsGroup": "Parameter Panggilan",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

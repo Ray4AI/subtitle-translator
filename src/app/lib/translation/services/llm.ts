@@ -22,7 +22,7 @@ import {
 import { getAIModelPromptParts } from "../utils";
 import { isNetworkError } from "@/app/utils/errorUtils";
 
-import { fetchJSON, normalizeNumber, normalizePrompt, requireApiKey, requireUrl, completeOpenAICompatUrl, PROXY_ENDPOINTS, getOpenAICompatContent, getClaudeContent, RELAY_HINT_MARKER } from "./shared";
+import { fetchJSON, normalizeNumber, normalizePrompt, requireApiKey, requireUrl, completeOpenAICompatUrl, PROXY_ENDPOINTS, getOpenAICompatContent, getClaudeContent, RELAY_HINT_MARKER, parseExtraBody } from "./shared";
 
 // Prepare prompts common to all LLM services. The user prompt comes back both
 // joined (`prompt`) and split at ${content} (`promptPrefix` / `promptSuffix`):
@@ -49,6 +49,23 @@ type OpenAICompatRequestConfig = {
   extraBody?: Record<string, unknown>;
 };
 
+/**
+ * 用户的【额外请求体】合并次序 —— 压在最后,即它的键【盖过】内置字段。
+ *
+ * 这是唯一讲得通的次序:那些字段要覆盖的正是内置那几个(思考参数),而它是
+ * 用户手打的最具体指令。放在前面则这个功能的头号用例(手填
+ * `{"enable_thinking": false}` 关掉一个我们没建模的开关)会在 provider 恰好
+ * 有 THINKING_BUILDER 时被内置值盖掉 —— 用户看着自己填的字段生效不了,而
+ * 界面上没有任何东西说明为什么。
+ *
+ * ⚠ 这条对 temperature / model / stream 同样成立:盖它们是【用户的选择】
+ * (同一个逃生口,同一条理由),不是 bug。
+ */
+const withUserExtraBody = (body: Record<string, unknown>, params: TranslateTextParams): Record<string, unknown> => {
+  const extra = parseExtraBody(params.extraBody);
+  return extra ? { ...body, ...extra } : body;
+};
+
 const openAICompatRequest = async (cfg: OpenAICompatRequestConfig): Promise<string> => {
   const { params, serviceName, endpoint, defaultModel, defaultTemperature, extraHeaders, extraBody } = cfg;
   const { apiKey, model, temperature } = params;
@@ -72,20 +89,25 @@ const openAICompatRequest = async (cfg: OpenAICompatRequestConfig): Promise<stri
       ...(key ? { Authorization: `Bearer ${key}` } : {}),
       ...extraHeaders,
     },
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: effectiveSystemPrompt },
-        { role: "user", content: prompt },
-      ],
-      ...(effectiveModel ? { model: effectiveModel } : {}),
-      // Providers whose spec omits defaultTemperature never send the param —
-      // their lineup rejects/locks it (GPT-5.x 400s, kimi-k2.x errors); the
-      // server default applies. Everyone else keeps the normal tunable value.
-      ...(defaultTemperature !== undefined ? { temperature: normalizeNumber(temperature, defaultTemperature) } : {}),
-      stream: false,
-      // No max_tokens — cloud models don't repeat-loop. Only `llm` Custom exposes it.
-      ...extraBody,
-    }),
+    body: JSON.stringify(
+      withUserExtraBody(
+        {
+          messages: [
+            { role: "system", content: effectiveSystemPrompt },
+            { role: "user", content: prompt },
+          ],
+          ...(effectiveModel ? { model: effectiveModel } : {}),
+          // Providers whose spec omits defaultTemperature never send the param —
+          // their lineup rejects/locks it (GPT-5.x 400s, kimi-k2.x errors); the
+          // server default applies. Everyone else keeps the normal tunable value.
+          ...(defaultTemperature !== undefined ? { temperature: normalizeNumber(temperature, defaultTemperature) } : {}),
+          stream: false,
+          // No max_tokens — cloud models don't repeat-loop. Only `llm` Custom exposes it.
+          ...extraBody,
+        },
+        params,
+      ),
+    ),
     signal: params.signal,
   });
   return getOpenAICompatContent(data, serviceName);
@@ -391,6 +413,13 @@ export const gemini: TranslationService = async (params) => {
   // No temperature: Gemini 3.x strongly recommends the default (1.0; lower
   // values risk looping/degraded reasoning) — the config has no temperature
   // field (registry), so the request omits it and the server default applies.
+  //
+  // ⚠ 额外请求体在 Gemini 上合并进【顶层】(不是 generationConfig):关闭思考
+  // 的厂商参数(`thinkingConfig` 各家写法不同)在 generateContent 协议里是
+  // generationConfig 的子字段 —— 用户想覆盖它就得自己写
+  // `{"generationConfig": {"thinkingConfig": {"thinkingLevel": "low"}}}`,
+  // 顶层合并会整份盖掉 generationConfig,正是要的行为。而 top-level 参数
+  // (safetySettings 等)同样在顶层。两种都可达 = 逃生口成立。
   const generationConfig: Record<string, unknown> = buildGeminiThinkingConfig(effectiveModel, reasoningEffort);
 
   // Auth via x-goog-api-key header — the only form the official docs still
@@ -399,11 +428,16 @@ export const gemini: TranslationService = async (params) => {
   const data = (await fetchJSON(`https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      systemInstruction: { parts: [{ text: effectiveSystemPrompt }] },
-      generationConfig,
-    }),
+    body: JSON.stringify(
+      withUserExtraBody(
+        {
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: effectiveSystemPrompt }] },
+          generationConfig,
+        },
+        params,
+      ),
+    ),
     signal: params.signal,
   }).catch((error) => {
     // 2026-06-19 起 Gemini API 拒绝「无限制 API Key」的请求(官方公告 + api-key
@@ -475,13 +509,16 @@ export const azureopenai: TranslationService = async (params) => {
   // No temperature — Microsoft lists it under "Not Supported" for the whole
   // GPT-5 reasoning family (runtime evidence: 400, not ignore); provider-level
   // omit, the config has no temperature field (registry).
-  const requestBody: Record<string, unknown> = {
-    messages: [
-      { role: "system", content: effectiveSystemPrompt },
-      { role: "user", content: prompt },
-    ],
-    ...buildAzureReasoningBody(deployment, reasoningEffort),
-  };
+  const requestBody: Record<string, unknown> = withUserExtraBody(
+    {
+      messages: [
+        { role: "system", content: effectiveSystemPrompt },
+        { role: "user", content: prompt },
+      ],
+      ...buildAzureReasoningBody(deployment, reasoningEffort),
+    },
+    params,
+  );
 
   const data = await fetchJSON(requestUrl, {
     method: "POST",
@@ -557,15 +594,18 @@ export const nvidia: TranslationService = async (params) => {
   const effectiveModel = model || defaultConfigs.nvidia.model!;
   const thinkingParams = buildNvidiaThinkingParams(reasoningEffort);
 
-  const requestBody: Record<string, unknown> = {
-    messages: [
-      { role: "system", content: effectiveSystemPrompt },
-      { role: "user", content: prompt },
-    ],
-    model: effectiveModel,
-    temperature: normalizeNumber(temperature, defaultConfigs.nvidia.temperature),
-    ...thinkingParams,
-  };
+  const requestBody: Record<string, unknown> = withUserExtraBody(
+    {
+      messages: [
+        { role: "system", content: effectiveSystemPrompt },
+        { role: "user", content: prompt },
+      ],
+      model: effectiveModel,
+      temperature: normalizeNumber(temperature, defaultConfigs.nvidia.temperature),
+      ...thinkingParams,
+    },
+    params,
+  );
 
   // Direct call (custom endpoint) vs proxy call (default Nvidia API, avoids CORS)
   // !!url?.trim() 同 deepl/deeplx:纯空白 URL(" ")是 truthy,
@@ -640,7 +680,7 @@ export const llm: TranslationService = async (params) => {
   const data = await fetchJSON(apiEndpoint, {
     method: "POST",
     headers,
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify(withUserExtraBody(requestBody, params)),
     signal: params.signal,
   });
   return getOpenAICompatContent(data, serviceName);
@@ -750,13 +790,16 @@ export const claude: TranslationService = async (params) => {
     ...(promptPrefix ? [{ type: "text", text: promptPrefix, cache_control: { type: "ephemeral" } }] : []),
     ...(promptSuffix ? [{ type: "text", text: promptSuffix }] : []),
   ];
-  const requestBody: Record<string, unknown> = {
-    model: effectiveModel,
-    system: [{ type: "text", text: effectiveSystemPrompt, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userContent }],
-    max_tokens: maxTokens,
-    ...thinkingBody,
-  };
+  const requestBody: Record<string, unknown> = withUserExtraBody(
+    {
+      model: effectiveModel,
+      system: [{ type: "text", text: effectiveSystemPrompt, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: userContent }],
+      max_tokens: maxTokens,
+      ...thinkingBody,
+    },
+    params,
+  );
 
   // Direct-to-Anthropic from the browser requires the explicit opt-in CORS
   // header since 2024-08 (bring-your-own-key apps). When proxied through the

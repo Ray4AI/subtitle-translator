@@ -434,7 +434,9 @@ const translateSingle = async (text: string, cacheSuffix: string, config: Pipeli
   // Build translate params - pick defined optional fields from config.
   // reasoningEffort is derived per-call from the thinkingEffort record
   // (presence of entry for current model = effort, absence = thinking off).
-  const optionalFields = ["useCache", "apiKey", "region", "url", "model", "apiVersion", "folderId", "temperature", "maxTokens", "systemPrompt", "userPrompt", "sendSystemPrompt", "useRelay", "relayBase", "domains"] as const;
+  // extraBody: 用户填的原始 JSON 文本,服务层在合并进请求体时才解析
+  // (parseExtraBody,非法值抛不可重试错误 —— 见 services/shared.ts)。这里只搬运。
+  const optionalFields = ["useCache", "apiKey", "region", "url", "model", "apiVersion", "folderId", "temperature", "maxTokens", "systemPrompt", "userPrompt", "sendSystemPrompt", "useRelay", "relayBase", "domains", "extraBody"] as const;
   const extras: Record<string, unknown> = {};
   const configRecord = config as unknown as Record<string, unknown>;
   for (const key of optionalFields) {

@@ -73,6 +73,8 @@ LLM modes give you:
 - **Customization**: configure system / user prompts for a specific translation style
 - **Temperature Control**: adjust AI creativity (0–1 scale)
 - **Thinking Mode**: per-provider toggle for reasoning-capable models
+- **Extra Request Body**: send any JSON the provider accepts — the escape hatch for
+  per-vendor thinking switches this app doesn'''t model yet
 
 ## Context-Aware Translation (LLM only)
 
@@ -110,6 +112,8 @@ LLM modes can send surrounding lines as context for each batch, improving dialog
 **How do I keep names and proper nouns consistent?** Add a glossary in the System Prompt (e.g. "Keep verbatim: iPhone, OpenAI, John Smith") on any LLM engine; all episodes share the same context, so terminology stays consistent across a season.
 
 **Do I need "preserve timecodes / line numbers" prompts?** No. Timecodes, cue numbers, and headers are extracted locally and re-inserted after translation — the model never sees them. Keep your prompt focused on style, glossary, and tone.
+
+**My model thinks by default and translation is slow — how do I turn thinking off?** Set **Thinking Mode** to Off in API Settings when the provider is supported. For a model or gateway we don'''t model yet, use **Extra request body (JSON)** and send the vendor'''s own switch verbatim — e.g. `{"enable_thinking": false}`, `{"chat_template_kwargs": {"thinking": false}}`, or `{"reasoning": {"enabled": false}}` (OpenRouter). Whatever you put there is merged into the request last, so it overrides the built-in parameters. Check your provider'''s docs for the exact parameter name.
 
 **Is it private?** Yes. Everything runs client-side: subtitle parsing, translation requests, and caching all happen in your browser. API keys are stored only in local browser storage, and LLM requests go directly from your browser to your configured endpoint.
 

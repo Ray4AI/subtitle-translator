@@ -4,7 +4,7 @@
 // this file must stay importable from Node (CLI/server) — the barrels carry
 // "use client" / browser-only modules (file-saver) that a Node entry must not pull.
 import { LLM_MODELS } from "./registry";
-import { RELAY_HINT_MARKER, RELAY_BASE_INVALID_MARKER, CORS_HINT_MARKER } from "./services/shared";
+import { RELAY_HINT_MARKER, RELAY_BASE_INVALID_MARKER, CORS_HINT_MARKER, EXTRA_BODY_INVALID_MARKER } from "./services/shared";
 import { isAbortError, isCascadedAbort } from "@/app/utils/errorUtils";
 
 // MT-categorized services that actually delegate to an LLM runtime under the
@@ -86,7 +86,10 @@ export const isDefiniteAuthFailure = (error: unknown): boolean => {
  * response has finish_reason==="length" — same input + same max_tokens
  * truncates at the same boundary every time, so retries are pure waste.
  */
-const NON_RETRYABLE_MESSAGES = [RELAY_HINT_MARKER.toLowerCase(), "请在 api 设置中开启", "max_tokens reached", RELAY_BASE_INVALID_MARKER.toLowerCase(), CORS_HINT_MARKER.toLowerCase()];
+// Note: every marker here is a CONFIG error, not a transient fault — the next
+// attempt reads the same stored value and fails identically. See each marker's
+// own comment for the cost of leaving it retryable.
+const NON_RETRYABLE_MESSAGES = [RELAY_HINT_MARKER.toLowerCase(), "请在 api 设置中开启", "max_tokens reached", RELAY_BASE_INVALID_MARKER.toLowerCase(), CORS_HINT_MARKER.toLowerCase(), EXTRA_BODY_INVALID_MARKER.toLowerCase()];
 
 /**
  * Check if error is retryable (server errors or rate limits).

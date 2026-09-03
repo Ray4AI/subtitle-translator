@@ -429,7 +429,9 @@ const useTranslationState = () => {
     });
     if (!syncResult.ok) {
       if ("errorKey" in syncResult) {
-        message.error(t(syncResult.errorKey));
+        // invalidExtraBody 是配置错误(JSON 写坏了),10s 才够读完那句
+        // 「去哪里改」—— 其余缺凭据类提示一句话就够。
+        message.error({ content: t(syncResult.errorKey), duration: syncResult.errorKey === "invalidExtraBody" ? 10 : undefined });
       } else if (syncResult.errorMessage) {
         message.error({ content: syncResult.errorMessage, duration: 10 });
       }

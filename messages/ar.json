@@ -219,7 +219,8 @@
     "errorHintRelay403": "أعادت واجهة API الخطأ 403 (محظور) — فعِّل «ترحيل API» في «المزيد من إعدادات Provider»",
     "errorHintCors": "تعذَّر الاتصال بهذا العنوان — تحقَّق من العنوان ومن أن الخدمة تسمح بالطلبات من أصل مختلف (CORS). البوابات المستضافة ذاتيًا والنماذج المحلية يجب أن تفعّل ذلك بنفسها، أو استخدم ترحيل API الخاص بك",
     "errorHintGeminiKey": "تعذّر الوصول إلى Gemini: تحقق من الشبكة أولًا (بعض الشبكات لا تصل مباشرة إلى خدمات Google). إذا كانت الشبكة سليمة، فمنذ 19 يونيو 2026 ترفض Google مفاتيح API غير المقيّدة — أعد إنشاء مفتاحك في AI Studio (مقيّد افتراضيًا) أو أضف قيد Gemini API للمفتاح القديم في وحدة تحكم Google Cloud",
-    "rateLimitCooldown": "تم تجاوز حد الطلبات — إيقاف مؤقت قصير ثم إعادة المحاولة تلقائيًا"
+    "rateLimitCooldown": "تم تجاوز حد الطلبات — إيقاف مؤقت قصير ثم إعادة المحاولة تلقائيًا",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "قم بتحميل الترجمات أو لصق المحتوى. اختر لغة الهدف للترجمة السريعة. يدعم المعالجة المجمعة ويحافظ على الجدول الزمني.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "تشترك جميع خدمات LLM في هذه الموجهات؛ التبديل بين الخدمات لن يعيد ضبطها",
     "credentialsGroup": "بيانات الاعتماد",
     "modelGroup": "النموذج",
-    "callParamsGroup": "معاملات الاستدعاء"
+    "callParamsGroup": "معاملات الاستدعاء",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

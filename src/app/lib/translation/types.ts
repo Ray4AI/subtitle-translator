@@ -62,6 +62,13 @@ export interface TranslateTextParams {
   // (subtitle-translator#53).
   glossaryBlock?: string;
   fullText?: string; // Optional: complete text for ${fullText} variable
+  /**
+   * Raw JSON text of the user's extra request body — same value as
+   * TranslationConfig.extraBody, carried through to the service verbatim.
+   * Services parse it at merge time (parseExtraBody) and merge it LAST so its
+   * keys override the built-in ones. See TranslationConfig.extraBody.
+   */
+  extraBody?: string;
   signal?: AbortSignal; // Optional: for request cancellation
 }
 
@@ -117,6 +124,22 @@ export interface TranslationConfig {
   userPrompt?: string;
   sendSystemPrompt?: boolean;
   useRelay?: boolean;
+  /**
+   * Raw JSON OBJECT text merged into the LLM request body — the escape hatch for
+   * wire params this project doesn't model (per-vendor thinking switches:
+   * `chat_template_kwargs`, `enable_thinking`, `reasoning: {enabled:false}` …).
+   *
+   * Kept as a STRING (not a parsed object) because it lives in a `<textarea>`:
+   * an in-progress edit is invalid JSON and must stay typed-able. Parsed+validated
+   * at request time by parseExtraBody (services/shared.ts); an invalid value is
+   * rejected before any request by validateTranslationInputs, and throws a
+   * NON-retryable error if it still reaches the wire.
+   *
+   * Only LLM providers get this field in their registry defaults — MT engines have
+   * no "extra params" concept, and the field's presence drives UI visibility
+   * (same `!== undefined` convention as every other config field).
+   */
+  extraBody?: string;
   /**
    * Per-model thinking directive. Key is the model SKU; value is the chosen effort
    * (low/medium/high = thinking on) or the `"auto"` sentinel (omit, custom models

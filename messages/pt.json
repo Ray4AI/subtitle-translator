@@ -219,7 +219,8 @@
     "errorHintRelay403": "A API retornou 403 Forbidden — ative o \"Relay da API\" em \"Mais configurações do Provider\"",
     "errorHintCors": "Não foi possível acessar este endereço — verifique o endereço e se o serviço permite requisições de origem cruzada (CORS). Gateways auto-hospedados e modelos locais precisam habilitar isso, ou use o seu próprio Relay da API",
     "errorHintGeminiKey": "Não foi possível conectar ao Gemini: verifique primeiro sua rede (algumas redes não alcançam diretamente os serviços do Google). Se a rede estiver bem, desde 19/06/2026 o Google rejeita chaves de API sem restrições — gere novamente sua chave no AI Studio (restrita por padrão) ou adicione uma restrição de Gemini API à chave antiga no Console do Google Cloud",
-    "rateLimitCooldown": "Limite de requisições atingido — pausando brevemente, repetiremos automaticamente"
+    "rateLimitCooldown": "Limite de requisições atingido — pausando brevemente, repetiremos automaticamente",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "Envie legendas ou cole conteúdo. Selecione o idioma de destino para tradução rápida. Suporta processamento em lote e preserva a linha do tempo.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "Todos os serviços LLM compartilham esses prompts; alternar de serviço não os redefinirá",
     "credentialsGroup": "Credenciais",
     "modelGroup": "Modelo",
-    "callParamsGroup": "Parâmetros de chamada"
+    "callParamsGroup": "Parâmetros de chamada",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

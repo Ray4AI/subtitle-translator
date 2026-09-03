@@ -8,9 +8,10 @@
 // 校验直接复用它 —— 同 lib/translation/retry.ts 的导入纪律。
 import { checkLanguageSupport } from "@/app/lib/translation/utils";
 import { getConfigStatus, URL_ALSO_REQUIRED, URL_IS_PRIMARY_CRED } from "@/app/lib/translation/registry";
+import { validateExtraBody } from "@/app/lib/translation/services/shared";
 import type { TranslationConfig } from "@/app/lib/translation/types";
 
-export type ValidateInputsResult = { ok: true } | { ok: false; errorKey: "enterApiKey" | "enterApiUrl" } | { ok: false; errorMessage: string };
+export type ValidateInputsResult = { ok: true } | { ok: false; errorKey: "enterApiKey" | "enterApiUrl" | "invalidExtraBody" } | { ok: false; errorMessage: string };
 
 export interface ValidateInputsOpts {
   config: TranslationConfig;
@@ -40,6 +41,16 @@ export const validateTranslationInputs = (opts: ValidateInputsOpts): ValidateInp
   //   - URL_ALSO_REQUIRED with empty URL (azureopenai with apiKey but no URL)
   //   - missing region (azure)
   // before the request hits pRetry and burns 3 attempts with a confusing error.
+  // 额外请求体:配置错误,必须在发请求【之前】拦下。不拦的话它会在每个服务里
+  // 抛(parseExtraBody),而这个错误被标成 NON_RETRYABLE —— 结果是每一行立刻
+  // 软失败,几百行的文件一路转到底、译文全是原文,失败面板里几百条同样的
+  // JSON 解析错误。判据与设置面板的红框、wire 合并共用 parseExtraBody。
+  // 顺位在凭据【之前】:凭据没填是"还没配好",填了坏 JSON 是"配错了",
+  // 后者更具体 —— 而且这一条不查网络,零成本先跑。
+  if (validateExtraBody(config?.extraBody)) {
+    return { ok: false, errorKey: "invalidExtraBody" };
+  }
+
   if (getConfigStatus(method, config) === "needs-config") {
     if (URL_IS_PRIMARY_CRED.has(method)) {
       return { ok: false, errorKey: "enterApiUrl" };
@@ -110,4 +121,8 @@ export const pingSignature = (method: string, config: (TranslationConfig & { rel
     // 200 and a deterministic 400 ("system role not supported"), so a probe
     // pass from the other toggle state must not be replayed.
     sendSystemPrompt: config?.sendSystemPrompt ?? true,
+    // 额外请求体直接改写请求体:填上一个服务不认识的字段(或坏 JSON)会把
+    // 200 变 400,而它是「Test 之后才填」的典型 —— 不进签名的话,旧徽章会
+    // 继续显示绿色"已连接"。
+    extraBody: config?.extraBody ?? "",
   });

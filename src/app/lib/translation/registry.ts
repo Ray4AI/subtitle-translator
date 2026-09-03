@@ -450,7 +450,7 @@ export const PROVIDERS = {
     endpoints: [{ label: "Anthropic", url: "https://api.anthropic.com/v1/messages" }],
     // 无 temperature 字段:adaptive 世代 (Opus 5 / Sonnet 5 / Fable 5) 拒绝
     // 非默认 temperature(400，官方成文);统一 provider 级不发，服务端默认生效。
-    defaults: { url: "", apiKey: "", model: "claude-sonnet-5", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {}, useRelay: false },
+    defaults: { url: "", apiKey: "", model: "claude-sonnet-5", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {}, useRelay: false, extraBody: "" },
     // 两代思考机制并存 (service 层按 model 分流，见 services/llm.ts claude +
     // isAdaptiveThinkingClaude):
     //   - Adaptive thinking(Opus 5 / Sonnet 5 / Fable 5):thinking:{type:"adaptive"}
@@ -485,7 +485,7 @@ export const PROVIDERS = {
     // whats-new-gemini-3.5,AI Studio 已移除滑块)。service 层不发该参数 →
     // 服务端默认 1.0 生效;字段移除后 UI 输入框自动隐藏，migrateConfig 的
     // defaults-key-only 合并会清掉用户已存的旧值。
-    defaults: { apiKey: "", model: "gemini-3.7-flash", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {} },
+    defaults: { apiKey: "", model: "gemini-3.7-flash", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {}, extraBody: "" },
     // 仅收录 Gemini 3.x 系列 (2.5 已过时，且参数协议不同需要 budget mapping 增加
     // service 复杂度，精简掉 —— 手填旧世代由 buildGeminiThinkingConfig 的守卫兜住:
     // thinkingLevel 打到 2.x 上是确定性 400,理由写在那里)。Gemini 3 thinking 通过
@@ -921,7 +921,7 @@ export const PROVIDERS = {
     // 与中转开关正交:url 决定用哪个 endpoint,useRelay 决定走不走中转,二者互不覆盖。
     // endpoints[] 单条,理由同 claude:让官方地址被 classifyEndpointUrl 认出来。
     endpoints: [{ label: "Yandex Cloud", url: "https://llm.api.cloud.yandex.net/v1/chat/completions" }],
-    defaults: { url: "", apiKey: "", folderId: "", model: "yandexgpt-5.1", temperature: 0.7, batchSize: 20, contextBatchSize: 3, contextWindow: 50, useRelay: true },
+    defaults: { url: "", apiKey: "", folderId: "", model: "yandexgpt-5.1", temperature: 0.7, batchSize: 20, contextBatchSize: 3, contextWindow: 50, useRelay: true, extraBody: "" },
     // Hosted SKUs per aistudio.yandex.ru/docs/en/ai-studio/concepts/generation/models
     // (2026-08-20 逐条核对:下方 10 个 SKU 与官方"Common instance models"表【完全一致】,
     // 既无失效项也无遗漏项,无任何退役标注)。
@@ -1319,7 +1319,7 @@ export const PROVIDERS = {
     label: "Nvidia NIM",
     docs: "https://build.nvidia.com/explore/discover",
     apiKeyUrl: "https://build.nvidia.com/",
-    defaults: { url: "", apiKey: "", model: "deepseek-ai/deepseek-v4-flash-0731", temperature: 0.7, batchSize: 20, contextBatchSize: 3, contextWindow: 50 },
+    defaults: { url: "", apiKey: "", model: "deepseek-ai/deepseek-v4-flash-0731", temperature: 0.7, batchSize: 20, contextBatchSize: 3, contextWindow: 50, extraBody: "" },
     // model id 一律以 integrate.api.nvidia.com/v1/models 实拉为准 ——
     // build.nvidia.com 展示页的 slug 跟真实 id 不是一回事，别照着网页抄。
     //
@@ -1355,7 +1355,7 @@ export const PROVIDERS = {
     // 无 temperature 字段：微软官方把 temperature 列入 reasoning 模型 Not
     // Supported 清单 (GPT-5 全系，learn.microsoft.com/azure/ai-foundry/openai/
     // how-to/reasoning),运行时证据为 400;统一 provider 级不发。
-    defaults: { url: "", apiKey: "", model: "gpt-5.4-mini", apiVersion: "2025-11-18", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {} },
+    defaults: { url: "", apiKey: "", model: "gpt-5.4-mini", apiVersion: "2025-11-18", batchSize: 20, contextBatchSize: 3, contextWindow: 50, thinkingEffort: {}, extraBody: "" },
     // GPT-5 系列全部支持 reasoning(OpenAI 原生 + Azure 镜像同行为)。
     // gpt-chat-latest 是 5.5 Instant 别名 (per Azure docs),同样支持;2026-08 复核
     // 别名指向未变，但它现在明确标 Preview 且滚动更新(最新快照 2026-08-06 把上下文
@@ -1412,7 +1412,7 @@ export const PROVIDERS = {
     // path is the entry point for local Ollama/LM Studio users — small models
     // (<14B) commonly drop lines or scramble structure in long batches.
     // Power users with bigger local models can raise it in Advanced Settings.
-    defaults: { url: "", apiKey: "", model: "", temperature: 0.7, maxTokens: 0, sendSystemPrompt: true, batchSize: 10, contextBatchSize: 1, contextWindow: 30 },
+    defaults: { url: "", apiKey: "", model: "", temperature: 0.7, maxTokens: 0, sendSystemPrompt: true, batchSize: 10, contextBatchSize: 1, contextWindow: 30, extraBody: "" },
     // 每个芯片背后是一个独立产品，所以各带各的 docs —— provider 级的一条链接
     // 在这里没有意义（"Custom" 没有文档），而这条路恰恰最需要文档:用户得先照着
     // 上游的说明把服务跑起来、把地址和模型名弄对。链接一律写最终落点(2026-08-21
@@ -1677,6 +1677,13 @@ const buildOpenAICompatDefault = (spec: OpenAICompatProviderSpec): TranslationCo
   // classifyEndpointUrl。
   base.url = "";
   if (spec.defaultUseRelay !== undefined) base.useRelay = spec.defaultUseRelay;
+  // 额外请求体:每个 openai-compat provider 都发这个字段(空串 = 未使用)。
+  // 与 url 同一条理由 —— 「哪家会有我们没建模的思考参数」无法预判(新模型、新
+  // 网关随时出现,而各家关闭思考的写法完全不同),逐条 opt-in 的结果必然是漏。
+  // 手写实现的 LLM 服务(claude / gemini / azureopenai / yandex / nvidia / llm)
+  // 各自在 defaults 里带;纯 MT 服务一律不带 —— 它们的协议没有「额外参数」这
+  // 个概念,给一个就是虚假承诺。
+  base.extraBody = "";
   // Seed an empty thinkingEffort record when any model on this provider is
   // tagged thinking. Without this, migrateConfig strips the field on next
   // render (defaults-key-only merge), making the UI toggle silently reset.

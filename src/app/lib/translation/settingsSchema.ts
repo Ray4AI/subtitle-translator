@@ -155,6 +155,11 @@ export const sanitizeSettings = (settings: TranslationSettings): TranslationSett
   const sanitizeProviderConfig = (cfg: unknown): void => {
     if (typeof cfg !== "object" || cfg === null) return;
     const bag = cfg as Record<string, unknown>;
+    // 额外请求体:非字符串一律丢(对象/数字会让 TextArea 的 value 直接崩),
+    // 【但合法的 JSON 字符串即使内容不合法也保留】—— 与 relayBase 同一条理由:
+    // 那是"能不能用"的问题,设置面板有红框、翻译前有硬阻断,两处都看得见,
+    // 不该在导入时静默删掉用户手打的一段配置(他可能只是粘到一半)。
+    if ("extraBody" in bag && typeof bag.extraBody !== "string") delete bag.extraBody;
     // per-provider 的 `url` 与 relayBase 同一类风险,判据也用同一个:它决定
     // 【apiKey 发去哪】。此前这里只看数值字段,url 原样放行 —— 而 url 已经变成
     // 全员配发的逃生口(不再被 migrateConfig 的键裁剪挡掉),于是一份分享来的设置

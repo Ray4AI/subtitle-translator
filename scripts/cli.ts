@@ -278,6 +278,7 @@ const readTextFile = async (path: string): Promise<string> => {
 const CRED_ERROR_TEXT: Record<string, string> = {
   enterApiKey: "requires an API key — configure it in the web UI and export settings (-s), or pass --api-key",
   enterApiUrl: "requires an endpoint URL — pass --url, or configure it in the web UI and export settings (-s)",
+  invalidExtraBody: `has an invalid "extraBody" — it must be a JSON object (e.g. {"enable_thinking": false}). Fix it in the web UI and re-export settings, or edit the settings file directly.`,
 };
 
 const main = async (): Promise<number> => {

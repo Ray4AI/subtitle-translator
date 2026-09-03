@@ -219,7 +219,8 @@
     "errorHintRelay403": "The API returned 403 Forbidden — enable \"API relay\" under \"More provider settings\"",
     "errorHintCors": "Can't reach this endpoint — check the address, and make sure the service allows cross-origin requests (CORS). Self-hosted gateways and local models have to enable it themselves, or use your own API relay",
     "errorHintGeminiKey": "Cannot reach Gemini: check your network first (some networks cannot reach Google services directly). If the network is fine, Google has been rejecting unrestricted API keys since June 19, 2026 — regenerate your key in AI Studio (restricted by default) or add a Gemini API restriction to the old key in Google Cloud Console",
-    "rateLimitCooldown": "Rate limited — pausing briefly, will retry automatically"
+    "rateLimitCooldown": "Rate limited — pausing briefly, will retry automatically",
+    "invalidExtraBody": "Extra request body is not valid JSON — fix it in 'More provider settings'."
   },
   "SubtitleTranslator": {
     "clientDescription": "Upload subtitles or paste content. Select target language for fast translation. Supports batch processing and retains timelines.",
@@ -362,7 +363,11 @@
     "globalPromptsExtra": "All LLM services share these prompts; switching services will not reset them",
     "credentialsGroup": "Credentials",
     "modelGroup": "Model",
-    "callParamsGroup": "Call parameters"
+    "callParamsGroup": "Call parameters",
+    "extraBody": "Extra request body (JSON)",
+    "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
+    "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
+    "extraBodyGroup": "Request body"
   },
   "tools": {
     "subtitleTranslator": {

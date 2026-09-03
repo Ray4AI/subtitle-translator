@@ -62,6 +62,11 @@ export const generateCacheSuffix = ({ sourceLanguage, targetLanguage, translatio
       // hash it when set. undefined and 0 hash identically (both = no cap)
       // — preserves caches from before this knob existed.
       ...(config?.maxTokens && config.maxTokens > 0 && { maxTokens: config.maxTokens }),
+      // 额外请求体:它直接改写请求体(多半就是思考参数),不同的内容必然产出
+      // 不同译文 —— 不进缓存键的话,用户填了「关闭思考」却拿到上一轮思考模式
+      // 的译文,而且零请求、无从察觉。空值不进键(与改功能前逐位相同,老缓存
+      // 全部继续命中)。
+      ...(config?.extraBody?.trim() && { extraBody: config.extraBody.trim() }),
       // Custom OpenAI-compat toggle: when false, no system message is sent
       // (Gemma-family workaround). Hashing as a separate field keeps systemPrompt
       // semantically "what the user configured", so future normalizePrompt

@@ -329,6 +329,83 @@ export const requireUrl = (serviceName: string, url: string | undefined): string
 };
 
 // ============================================================================
+// Extra request body (user-supplied JSON)
+// ============================================================================
+
+/**
+ * 额外请求体不合法的分类标记 —— 与 RELAY_BASE_INVALID_MARKER 同一套用法:嵌进
+ * 消息,retry.ts 的 NON_RETRYABLE_MESSAGES 引它,改措辞不会静默破坏分类。
+ *
+ * 【不可重试】是这里的重点:这是配置错误,不是瞬时故障。下次尝试读的是同一个
+ * localStorage 值,必然同样失败 —— 不标的话(错误无 status → isRetryableError
+ * 的 `!status` 判真)每一行都会烧满重试预算,几百行的文件要转很久才报出一个
+ * 用户改一下文本框就能解决的问题。
+ */
+export const EXTRA_BODY_INVALID_MARKER = "extra request body is not a valid JSON object";
+
+/**
+ * 解析用户在设置里填的【额外请求体】原始 JSON 文本。
+ *
+ * 契约(三处消费者共用同一份判据 —— UI 红框 / 翻译前校验 / wire 合并):
+ *   - 空 / 纯空白 → null(= 没有这个配置,不发任何额外字段)
+ *   - 合法 JSON 且【顶层是对象】→ 该对象(merged 进请求体最后)
+ *   - 合法 JSON 但顶层是数组/标量/null → throw(会污染请求体或静默无效)
+ *   - 非法 JSON → throw
+ *   - 超长 / 嵌套过深 → throw(防手滑粘进整篇文档把每个请求撑爆)
+ *
+ * ⚠ 顶层必须是【对象】:请求体是对象,只有对象能被展开合并。JSON 数组是合法
+ *   JSON,但 `{...["a"]}` 会展开成 {0:"a"} —— 一个没人见过的字段,界面上看不
+ *   出问题,请求却悄悄变了。宁可当场报错也不要这种静默变形。
+ *
+ * ⚠ 原型污染:JSON.parse 会把 `__proto__` 当普通键解析,展开进请求体时它
+ *   会走【赋值】语义 —— 修改 Object.prototype。这里显式丢掉 `__proto__` /
+ *   `constructor` / `prototype` 三个危险键,其余键原样放行(厂商参数名五花
+ *   八门,白名单会挡掉正当用法)。
+ */
+export const MAX_EXTRA_BODY_CHARS = 4000;
+
+/** Same message for UI (red border) and wire (thrown error) — one string, two surfaces. */
+export const extraBodyErrorMessage = (reason: string): string => `${EXTRA_BODY_INVALID_MARKER} — ${reason}`;
+
+export const parseExtraBody = (raw: string | undefined): Record<string, unknown> | null => {
+  const text = raw?.trim();
+  if (!text) return null;
+  if (text.length > MAX_EXTRA_BODY_CHARS) {
+    throw new Error(extraBodyErrorMessage(`too long (${text.length} chars, max ${MAX_EXTRA_BODY_CHARS})`));
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(extraBodyErrorMessage(error instanceof Error ? error.message : "invalid JSON"));
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(extraBodyErrorMessage("top level must be a JSON object, e.g. {\"enable_thinking\": false}"));
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    // 见上方注释:危险键直接丢(不做深递归 —— 嵌套对象里的 __proto__ 是普通数据键,
+    // JSON.parse 只在外层给它 setter 语义,而展开也只有外层会触发赋值)。
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+    out[key] = value;
+  }
+  return out;
+};
+
+/**
+ * 非抛出版本:UI(设置面板红框)与翻译前校验用。非法 → 返回错误原因串,
+ * 合法/为空 → null。判据直接复用 parseExtraBody,两个入口不可能分叉。
+ */
+export const validateExtraBody = (raw: string | undefined): string | null => {
+  try {
+    parseExtraBody(raw);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : EXTRA_BODY_INVALID_MARKER;
+  }
+};
+
+// ============================================================================
 // HTTP requests & error handling
 // ============================================================================
 
