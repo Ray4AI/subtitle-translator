@@ -174,6 +174,23 @@ yarn dev        # http://localhost:3000
 yarn build      # 构建生产版本
 ```
 
+### Docker
+
+```bash
+docker run -d -p 3000:3000 --name subtitle-translator ghcr.io/ray4ai/subtitle-translator:main
+```
+
+或使用仓库内的 `docker-compose.yml`（可把镜像标签改成固定版本）：
+
+```bash
+docker compose up -d                        # 启动
+docker compose pull && docker compose up -d # 更新到最新构建
+docker compose logs -f                      # 查看日志
+```
+
+镜像为多架构（`linux/amd64` + `linux/arm64`），推送到 GHCR：每次推送到 `main`
+（`:main`）、每次打 `v*` 标签（`:<version>`、`:latest`）。
+
 ## 文档与部署
 
 详细配置、API 设置和自托管说明，请参阅 **[官方文档](https://docs.newzone.top/guide/translation/subtitle-translator/)**。

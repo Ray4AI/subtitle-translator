@@ -1,0 +1,30 @@
+# Self-host Subtitle Translator on your own VPS.
+#
+#   docker compose up -d          # start (pulls ghcr.io/<owner>/subtitle-translator:main)
+#   docker compose pull && docker compose up -d   # update to the latest build
+#   docker compose logs -f        # follow logs
+#   docker compose down           # stop and remove the container
+#
+# The web UI is then at http://<your-vps-ip>:3000.
+#
+# The image is built with DOCKER_BUILD=true, which switches next.config.ts to
+# `output: "standalone"` — that is what enables the bundled /api/deepl and
+# /api/nvidia routes. Those two are the only server-side pieces; everything
+# else (parsing, translation requests, cache, API keys) runs in your browser.
+services:
+  subtitle-translator:
+    # Replace <owner> with the GitHub account that owns the image, or pin a
+    # version tag (:3.2.0) instead of :main if you'd rather update manually.
+    image: ghcr.io/ray4ai/subtitle-translator:main
+    container_name: subtitle-translator
+    restart: unless-stopped
+    ports:
+      # Change the left side to expose a different host port: "8080:3000".
+      - "3000:3000"
+    environment:
+      # Already baked into the image — listed here so the two are visible in
+      # one place. Don't set DOCKER_BUILD at runtime; it's a build-time switch.
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - PORT=3000
+      - HOSTNAME=0.0.0.0

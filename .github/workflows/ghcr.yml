@@ -1,0 +1,83 @@
+# Push the Docker image to GitHub Container Registry (ghcr.io).
+#
+# Why a second workflow instead of editing docker.yml: that one also pushes to
+# Docker Hub and needs DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets. On a fork
+# those are unset, so `docker/login-action` fails and nothing is published —
+# including the GHCR half a self-hoster actually needs. This one only needs
+# GITHUB_TOKEN, which every repo has.
+#
+# Triggers:
+#   - push to main  → :main (rolling build, what a self-hoster pulls to update)
+#   - v* tag        → :<version>, :<major>.<minor>, :latest (pinned releases)
+#   - manual        → :main, plus :sha-<shortsha> when you want an exact build
+#
+# Pull it on another VPS:
+#   docker run -d -p 3000:3000 ghcr.io/<owner>/subtitle-translator:main
+# (the image is multi-arch: linux/amd64 + linux/arm64)
+name: 🐳 Publish to GHCR
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: subtitle-translator
+
+jobs:
+  push_to_ghcr:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Check out the repo
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase GitHub Owner
+        run: echo "GH_OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+        env:
+          OWNER: "${{ github.repository_owner }}"
+
+      - name: 🏷️ Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.GH_OWNER_LC }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Multi-arch so the same tag works on amd64 VPSes and arm64
+          # boxes (Oracle Ampere, Raspberry Pi).
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

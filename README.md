@@ -175,6 +175,23 @@ yarn dev        # http://localhost:3000
 yarn build      # production build
 ```
 
+### Docker
+
+```bash
+docker run -d -p 3000:3000 --name subtitle-translator ghcr.io/ray4ai/subtitle-translator:main
+```
+
+Or with the bundled `docker-compose.yml` (edit the image tag to pin a version):
+
+```bash
+docker compose up -d                        # start
+docker compose pull && docker compose up -d # update to the latest build
+docker compose logs -f                      # follow logs
+```
+
+Images are multi-arch (`linux/amd64` + `linux/arm64`) and published to GHCR on
+every push to `main` (`:main`), on every `v*` tag (`:<version>`, `:latest`).
+
 ## Documentation & Deployment
 
 For detailed configuration, API setup, and self-hosting instructions, see the **[Official Documentation](https://docs.newzone.top/en/guide/translation/subtitle-translator/)**.
