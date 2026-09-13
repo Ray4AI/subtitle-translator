@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "อุณหภูมิ"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "แปลงอักษรจีนตัวย่อ ↔ ตัวเต็ม",
-      "description": "แปลงเป็นชุดระหว่างจีนตัวย่อ จีนตัวเต็มไต้หวัน จีนตัวเต็มฮ่องกง และอักษรญี่ปุ่นใหม่"
+      "description": "รองรับการอัปโหลดไฟล์และการประมวลผลเป็นชุดระหว่างจีนตัวย่อ จีนตัวเต็มไต้หวัน จีนตัวเต็มฮ่องกง และชินจิไตญี่ปุ่น"
     },
     "novelProcessor": {
       "title": "เครื่องมือจัดรูปแบบนิยายเว็บจีน",
@@ -505,7 +506,9 @@
     "otherTools": "เครื่องมือเพิ่มเติม",
     "externalTools": {
       "legendtalk": "โต๊ะกลมนักคิด AI",
-      "imgprompt": "พรอมต์รูปภาพ AI"
+      "imgprompt": "พรอมต์รูปภาพ AI",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData บันทึกโอเพนซอร์ส"
     }
   },
   "Metadata": {

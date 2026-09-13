@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "샘플링 온도"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "간체·번체 변환",
-      "description": "간체, 대만 번체, 홍콩 번체, 일본 신자체 일괄 변환"
+      "description": "파일 업로드 및 일괄 처리를 지원하는 간체, 대만 번체, 홍콩 번체 및 일본 신자체 변환"
     },
     "novelProcessor": {
       "title": "중국 웹소설 텍스트 정리 도구",
@@ -505,7 +506,9 @@
     "otherTools": "더 많은 도구",
     "externalTools": {
       "legendtalk": "AI 사상가 라운드테이블",
-      "imgprompt": "AI 이미지 프롬프트"
+      "imgprompt": "AI 이미지 프롬프트",
+      "lives": "천세서 인생 시뮬레이션",
+      "learndata": "LearnData 오픈소스 노트"
     }
   },
   "Metadata": {

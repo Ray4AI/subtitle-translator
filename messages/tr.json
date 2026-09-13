@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "Sıcaklık"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "Bas/Gel Çince Dönüştürücü",
-      "description": "Basitleştirilmiş, Tayvan geleneksel, Hong Kong geleneksel ve Japonca karakterleri toplu dönüştür"
+      "description": "Dosya yükleme ve toplu işlem desteğiyle Basitleştirilmiş, Tayvan/Hong Kong Geleneksel Çince ve Japon Shinjitai dönüştürme"
     },
     "novelProcessor": {
       "title": "Çince Web Roman Düzenleyici",
@@ -505,7 +506,9 @@
     "otherTools": "Daha Fazla Araç",
     "externalTools": {
       "legendtalk": "AI Düşünürler Yuvarlak Masası",
-      "imgprompt": "AI Görsel İstemleri"
+      "imgprompt": "AI Görsel İstemleri",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData Açık Kaynak Notlar"
     }
   },
   "Metadata": {

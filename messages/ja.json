@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "サンプリング温度"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "繁体・簡体字変換",
-      "description": "簡体字・台湾繁体字・香港繁体字・日本新字体を一括変換"
+      "description": "ファイルアップロードと一括処理に対応、簡体字・台湾繁体字・香港繁体字・日本新字体を高精度変換"
     },
     "novelProcessor": {
       "title": "中国語小説テキスト整理ツール",
@@ -505,7 +506,9 @@
     "otherTools": "その他のツール",
     "externalTools": {
       "legendtalk": "AI思想家ラウンドテーブル",
-      "imgprompt": "AI画像プロンプト"
+      "imgprompt": "AI画像プロンプト",
+      "lives": "千世書 人生シミュレーター",
+      "learndata": "LearnData オープンソースノート"
     }
   },
   "Metadata": {

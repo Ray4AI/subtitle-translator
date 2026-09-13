@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "درجة الحرارة"
   },
   "tools": {
     "subtitleTranslator": {
@@ -432,7 +433,7 @@
     },
     "chineseConversion": {
       "title": "تحويل الحروف الصينية",
-      "description": "تحويل بين المبسطة والتقليدية (تايوان وهونج كونج) والأحرف اليابانية الجديدة"
+      "description": "يدعم تحميل الملفات والمعالجة المجمعة للتحويل بين الصينية المبسطة والتقليدية (تايوان وهونغ كونغ) والشينجيتاي الياباني"
     },
     "novelProcessor": {
       "title": "منسّق الروايات الصينية على الويب",
@@ -505,7 +506,9 @@
     "otherTools": "المزيد من الأدوات",
     "externalTools": {
       "legendtalk": "طاولة مفكري الذكاء الاصطناعي",
-      "imgprompt": "موجهات صور الذكاء الاصطناعي"
+      "imgprompt": "موجهات صور الذكاء الاصطناعي",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData ملاحظات مفتوحة المصدر"
     }
   },
   "Metadata": {

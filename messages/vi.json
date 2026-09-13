@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "Nhiệt độ"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "Chuyển đổi Giản thể ↔ Phồn thể",
-      "description": "Chuyển đổi hàng loạt giữa giản thể, phồn thể Đài Loan, phồn thể Hồng Kông và chữ Nhật mới"
+      "description": "Hỗ trợ tải lên tệp và xử lý hàng loạt giữa chữ Giản thể, Phồn thể Đài Loan, Phồn thể Hồng Kông và Shinjitai Nhật Bản"
     },
     "novelProcessor": {
       "title": "Trình định dạng tiểu thuyết mạng Trung Quốc",
@@ -505,7 +506,9 @@
     "otherTools": "Thêm công cụ",
     "externalTools": {
       "legendtalk": "Bàn tròn nhà tư tưởng AI",
-      "imgprompt": "Câu lệnh tạo ảnh AI"
+      "imgprompt": "Câu lệnh tạo ảnh AI",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData Ghi chú nguồn mở"
     }
   },
   "Metadata": {

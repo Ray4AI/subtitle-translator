@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "Temperatura"
   },
   "tools": {
     "subtitleTranslator": {
@@ -436,7 +437,7 @@
     },
     "chineseConversion": {
       "title": "Conversor Semp/Trad",
-      "description": "Converti in batch semplificato, tradizionale di Taiwan, Hong Kong e caratteri giapponesi"
+      "description": "Supporta caricamento file ed elaborazione in batch per convertire semplificato, tradizionale di Taiwan/Hong Kong e shinjitai giapponese"
     },
     "novelProcessor": {
       "title": "Formattatore di romanzi web cinesi",
@@ -505,7 +506,9 @@
     "otherTools": "Altri strumenti",
     "externalTools": {
       "legendtalk": "Tavola rotonda dei pensatori IA",
-      "imgprompt": "Prompt per immagini IA"
+      "imgprompt": "Prompt per immagini IA",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData Note Open Source"
     }
   },
   "Metadata": {

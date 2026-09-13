@@ -392,15 +392,18 @@ export const PROVIDERS = {
     category: "llm",
     label: "DeepSeek",
     endpoint: "https://api.deepseek.com/chat/completions",
-    defaultModel: "deepseek-v4-flash",
+    defaultModel: "deepseek-flash",
     defaultTemperature: 0.7,
     docs: "https://api-docs.deepseek.com/",
     apiKeyUrl: "https://platform.deepseek.com/api_keys",
     defaultUseRelay: false,
-    // DeepSeek V4 系列两个 SKU 都支持 thinking / non-thinking 两种模式
-    // (docs.deepseek.com: "supporting both modes")。
+    // 官方说明 (2026-09)：模型名推荐使用 deepseek-flash（由 DeepSeek-V4.1-Flash 服务）。
+    // 旧模型名 deepseek-v4-flash 仍可调用，但已下线并路由到 V4.1 Flash；
+    // deepseek-v4-pro 于 2026-09-14 12:00 起全部路由到 V4.1 Flash，至未来 V4.1 Pro 上线。
+    // 各模型均支持 thinking / non-thinking 两种模式 (docs.deepseek.com: "supporting both modes")。
+    // 注：DeepSeek 另提供 Anthropic 兼容端点 (https://api.deepseek.com/anthropic)。
     models: [
-      { label: "DeepSeek V4 Flash", value: "deepseek-v4-flash", thinking: true },
+      { label: "DeepSeek Flash", value: "deepseek-flash", thinking: true },
       { label: "DeepSeek V4 Pro", value: "deepseek-v4-pro", thinking: true },
     ],
   },
@@ -471,7 +474,7 @@ export const PROVIDERS = {
       { label: "Claude Opus 5", value: "claude-opus-5", thinking: true },
       { label: "Claude Sonnet 5", value: "claude-sonnet-5", thinking: true },
       { label: "Claude Haiku 4.5", value: "claude-haiku-4-5", thinking: true },
-      { label: "Claude Fable 5", value: "claude-fable-5", thinking: true },
+      { label: "Claude Fable 5.1", value: "claude-fable-5-1", thinking: true },
     ],
   },
   gemini: {
@@ -976,7 +979,7 @@ export const PROVIDERS = {
     models: [
       { label: "Nemotron 3 Super 120B (free)", value: "nvidia/nemotron-3-super-120b-a12b:free" },
       { label: "Laguna S 2.1 (free)", value: "poolside/laguna-s-2.1:free" },
-      { label: "DeepSeek V4 Flash", value: "deepseek/deepseek-v4-flash", thinking: true },
+      { label: "DeepSeek V4.1 Flash", value: "deepseek/deepseek-v4.1-flash", thinking: true },
       // preview → 正式版:hy3-preview 在上游标注 2026-08-31 下线，不等它挂。
       // tencent/hy3 已核实有 4 个 status=0 的健康 provider(含腾讯自营),而
       // hy3-preview 只剩 GMICloud 单点供应 —— 单点本身就是随时归零的形态。
@@ -988,7 +991,7 @@ export const PROVIDERS = {
       // glm-5.3 不打 thinking:上游强制思考、不可禁用,打了标签 off 态会经 OpenRouter
       // 统一参数发 reasoning:{enabled:false},对它是非法请求。同原生 zhipu 的处理。
       { label: "GLM-5.3", value: "z-ai/glm-5.3" },
-      { label: "Grok 4.5", value: "x-ai/grok-4.5" },
+      { label: "Grok 4.6", value: "x-ai/grok-4.6" },
       { label: "Kimi K2.6", value: "moonshotai/kimi-k2.6", thinking: true },
       // M3 上游默认 adaptive thinking(可关)→ 打标签让 off 态经 OpenRouter
       // 统一参数发 reasoning:{enabled:false},否则默认烧推理 token。
@@ -1263,7 +1266,7 @@ export const PROVIDERS = {
     category: "aggregator",
     label: "SiliconFlow",
     endpoint: "https://api.siliconflow.cn/v1/chat/completions",
-    defaultModel: "deepseek-ai/DeepSeek-V4-Flash",
+    defaultModel: "deepseek-ai/DeepSeek-V4.1-Flash",
     defaultTemperature: 0.7,
     docs: "https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions",
     apiKeyUrl: "https://cloud.siliconflow.cn/me/account/ak",
@@ -1281,7 +1284,7 @@ export const PROVIDERS = {
     // 明确核过【不在】SiliconFlow 上:MiniMax-M3、GLM-5.3、Qwen3.8 —— 别照着别家
     // 的清单往这里搬。
     models: [
-      { label: "DeepSeek V4 Flash", value: "deepseek-ai/DeepSeek-V4-Flash", thinking: true },
+      { label: "DeepSeek V4.1 Flash", value: "deepseek-ai/DeepSeek-V4.1-Flash", thinking: true },
       { label: "DeepSeek V4 Pro", value: "deepseek-ai/DeepSeek-V4-Pro", thinking: true },
       { label: "Kimi K2.6 (Pro)", value: "Pro/moonshotai/Kimi-K2.6", thinking: true },
       { label: "GLM-5.2", value: "zai-org/GLM-5.2" },
@@ -1430,24 +1433,12 @@ export const PROVIDERS = {
       { label: "Fireworks AI", url: "https://api.fireworks.ai/inference/v1/chat/completions", docs: "https://docs.fireworks.ai/tools-sdks/openai-compatibility" },
     ],
   },
-
-  // ===== Internal-only (in defaultConfigs + dispatch but omitted from user-facing lists) =====
-  webgoogletranslate: {
-    kind: "custom",
-    category: "machine-translation",
-    label: "Web Google Translate",
-    defaults: { batchSize: 1 },
-  },
 } as const satisfies Record<string, ProviderSpec>;
 
 // Note: `TranslationMethod` is canonicalized in `./types.ts` (which adds the
 // `(string & {})` open-union to preserve user-supplied values). We don't
 // redeclare it here to avoid an ambiguous re-export via the barrel.
 type ProviderKey = keyof typeof PROVIDERS;
-
-// Providers that live in defaultConfigs + dispatch but are NOT surfaced in the
-// user-facing service list (server-side proxies, internal routing).
-const INTERNAL_PROVIDERS: ReadonlySet<string> = new Set(["webgoogletranslate"]);
 
 // ========== Derived views ==========
 
@@ -1485,7 +1476,7 @@ export const LLM_MODELS: string[] = Object.entries(PROVIDERS)
  * 入口会让用户误以为有完整执行能力。其余服务默认支持;新增无术语通道的 MT
  * 服务时在这里登记。
  */
-export const GLOSSARY_UNSUPPORTED: ReadonlySet<string> = new Set(["gtxFreeAPI", "edgeFreeAPI", "google", "deepl", "deeplx", "azure", "translategemma", "milmmt", "webgoogletranslate"]);
+export const GLOSSARY_UNSUPPORTED: ReadonlySet<string> = new Set(["gtxFreeAPI", "edgeFreeAPI", "google", "deepl", "deeplx", "azure", "translategemma", "milmmt"]);
 
 /** Whether the glossary feature should surface (and enforce) for a method. */
 export const supportsGlossary = (method: string): boolean => method in PROVIDERS && !GLOSSARY_UNSUPPORTED.has(method);
@@ -1626,14 +1617,13 @@ export const getConfigStatus = (method: string, config: TranslationConfig | unde
   if (!apiKeyOk || !urlOk || !regionOk || !folderIdOk) return "needs-config";
   // apiKey === undefined here means a no-credential service we forgot to flag
   // in NO_CRED_REQUIRED — keep the safer "free" default rather than lying
-  // about "configured" status. webgoogletranslate (internal) lands here.
+  // about "configured" status.
   return config.apiKey === undefined ? "free" : "configured";
 };
 
 // User-facing service list, declaration-order. The cast widens `as const` literal
 // types so optional `docs` / `apiKeyUrl` are uniformly accessible across entries.
 export const TRANSLATION_PROVIDERS: TranslationProvider[] = Object.entries(PROVIDERS)
-  .filter(([k]) => !INTERNAL_PROVIDERS.has(k))
   .map(([value, p]) => {
     const spec = p as ProviderSpec;
     return {
@@ -1890,79 +1880,6 @@ export const deriveThinkingParams = (method: string, config: TranslationConfig |
 // 只是 Medium 与 High 同效),对 k3 是必需。反过来只给 Off/On 则 k3 的 high
 // 永远选不到。thinking.test 的「三档形态 ↔ 声明一致」不变量抓住了这次矛盾。
 export const BINARY_EFFORT_VENDORS: ReadonlySet<string> = new Set(["deepseek", "doubao", "zhipu", "mimo", "siliconflow", "cohere", "qianfan", "mistral", "minimax"]);
-
-/**
- * Providers whose API leaves reasoning/thinking ENABLED when the request omits
- * the thinking field. For these, turning thinking OFF requires sending an
- * EXPLICIT disable payload — merely omitting it silently keeps thinking on and
- * burns reasoning tokens on every call. (The DeepSeek MD-translation "10M
- * tokens" report traced to exactly this: a thinking-off request still returned
- * full `reasoning_content`. Doc: api-docs.deepseek.com/zh-cn/guides/thinking_mode
- * — "默认思考开关为 enabled".)
- *
- * The per-vendor disable wire-shape lives in each entry of the THINKING_BUILDERS
- * table (services/llm.ts), declared as `gated(service, effortShape)`; gemini +
- * azureopenai (custom services) handle it inline. THIS set is the single source of
- * truth for WHO needs the explicit disable; the invariant test in
- * services/__tests__/thinking.test.ts asserts every OpenAI-compat member emits a
- * non-empty disable body when thinking is off.
- *
- * All verified against vendor docs (audit 2026-05): deepseek ("默认 enabled" on
- * V4), openai (gpt-5.5/gpt-chat-latest omit→medium; 5.4 omit→none, but we send
- * explicit none either way), grok (omit→server default "high"; no off value —
- * we send lowest level), qwen (3.5+ gen flips commercial
- * default to ON, incl. 3.6-plus), doubao (Seed omit→enabled), zhipu (glm-4.7/5/5.1
- * forced-thinking), moonshot (Kimi "enabled by default"), gemini (3.x omit→model's
- * built-in level, can't fully disable on Pro), mimo (binary thinking:{type}; doc
- * leads with the disable example), azureopenai (mirrors openai's gpt-5.5 omit→medium),
- * siliconflow (V4/K2.6 是上游原生透传,默认思考开;发原生 thinking:{type},
- * 它自家的 enable_thinking 按官方参数表不适用于 V4 系),
- * mistral (adjustable-reasoning mistral-medium-3-5/small via reasoning_effort high|none;
- * default model is reasoning-capable so omit may leave it on → send explicit "none").
- * gemini + azureopenai are CUSTOM services (handle the disable inline:
- * gemini 无关闭值 → 逐 SKU 最低档(pickThinkingLevel);azure → reasoning_effort
- * "none"), so the OpenAI-compat
- * invariant test filters them out — they're listed here for documentation.
- *
- * minimax joined 2026-07 with M3: `thinking:{type:"adaptive"|"disabled"}`,
- * server-default adaptive = ON, off must send explicit disabled (M2.x SKUs stay
- * untagged/intrinsic — the gate omits for them).
- *
- * EXCLUDED (untagged in `models`, no builder) — two distinct reasons, don't
- * conflate them:
- *   - nvidia: since the v4-pro removal it has ZERO thinking SKUs (vLLM defaults
- *     DeepSeek reasoning OFF, opt-in only) — nothing to control, omit is correct.
- *   - tokenhub/hy3: thinking IS toggleable (TokenHub doc 1823/135872,
- *     `thinking:{type:"enabled"|"disabled"|"adaptive"}`), but the documented
- *     DEFAULT is disabled — omitting already yields the non-thinking state
- *     translation wants. 加开关的 playbook 在 tokenhub models 注释里。
- * NOTE mistral is NO LONGER fully here: its default medium/small
- * accept reasoning_effort (Magistral SKU stays intrinsic).
- *
- * NOT in this set but DO send an explicit disable for their TAGGED reasoning SKUs
- * (their DEFAULT model is non-reasoning, so they fail the per-default-model
- * invariant — handled by their builders, not this set): openrouter (universal
- * `reasoning:{enabled:false}` when off), cohere (command-a-reasoning → reasoning_effort
- * "none"), qianfan (ernie-5.0-thinking → enable_thinking:false).
- * groq【已入列】:gpt-oss 推理不可关(官方无 none),但"关"不再是省略 ——
- * 省略落到未文档化的服务端默认,现在发显式最低档 low(2026-08 改)。
- */
-export const SERVER_DEFAULT_THINKING_ON: ReadonlySet<string> = new Set([
-  "groq",
-  "deepseek",
-  "openai",
-  "grok",
-  "qwen",
-  "doubao",
-  "zhipu",
-  "moonshot",
-  "gemini",
-  "mimo",
-  "azureopenai",
-  "siliconflow",
-  "mistral",
-  "minimax",
-]);
 
 /**
  * Quick-pick endpoints for providers that surface multiple URL options (regional

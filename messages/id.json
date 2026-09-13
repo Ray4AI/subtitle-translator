@@ -367,7 +367,8 @@
     "extraBody": "Extra request body (JSON)",
     "extraBodyExtra": "Merged into the request as-is, overriding built-in fields — e.g. turn off thinking with {\"enable_thinking\": false} or {\"chat_template_kwargs\": {\"thinking\": false}}. Only for LLM services; check your provider's docs for the exact parameter name.",
     "extraBodyPlaceholder": "e.g. {\"enable_thinking\": false}",
-    "extraBodyGroup": "Request body"
+    "extraBodyGroup": "Request body",
+    "temperature": "Suhu"
   },
   "tools": {
     "subtitleTranslator": {
@@ -432,7 +433,7 @@
     },
     "chineseConversion": {
       "title": "Konversi Karakter Tionghoa",
-      "description": "Konversi batch antara Sederhana, Tradisional Taiwan, Tradisional Hong Kong, dan Aksara Jepang Baru"
+      "description": "Mendukung unggah file dan pemrosesan batch antara Tionghoa Sederhana, Tradisional Taiwan/Hong Kong, dan Shinjitai Jepang"
     },
     "novelProcessor": {
       "title": "Pemformat Novel Web China",
@@ -505,7 +506,9 @@
     "otherTools": "Alat Lainnya",
     "externalTools": {
       "legendtalk": "Meja Bundar Pemikir AI",
-      "imgprompt": "Prompt Gambar AI"
+      "imgprompt": "Prompt Gambar AI",
+      "lives": "Thousand Lives",
+      "learndata": "LearnData Catatan Sumber Terbuka"
     }
   },
   "Metadata": {

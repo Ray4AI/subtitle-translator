@@ -15,16 +15,24 @@ export const VTT_SRT_TIME = /^(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3}[ \t]+-->[ \t]+(?:\
 // 时间行的 start/end 拆分(与上面同样的分隔符容忍度)
 export const TIME_ARROW_SPLIT = /[ \t]+-->[ \t]+/;
 // LRC 格式的时间标记正则表达式
-export const LRC_TIME_REGEX = /^\[\d{2}:\d{2}(\.\d{2,3})?\]/;
+const LRC_TIME_REGEX = /^\[\d{2}:\d{2}(\.\d{2,3})?\]/;
 // Same pattern with global flag — for `.match` / `.replace` across a line that
 // may have multiple time tags (e.g. karaoke lines). Pre-compiled at module
 // scope so the bilingual-output loop in SubtitleTranslator doesn't `new
 // RegExp()` per line × per call (was 2× per LRC line on every export).
-export const LRC_TIME_REGEX_GLOBAL = /\[\d{2}:\d{2}(?:\.\d{2,3})?\]/g;
+const LRC_TIME_REGEX_GLOBAL = /\[\d{2}:\d{2}(?:\.\d{2,3})?\]/g;
 const LRC_METADATA_REGEX = /^\[(ar|ti|al|by|offset|re|ve):/i;
 // YouTube SBV 时间行:`0:00:01.000,0:00:03.500`(逗号分隔 start,end,无 --> 箭头)。
 // 整行锚定 —— cue 文本里出现类似片段不会误判;ms 容忍 1-3 位(YouTube 固定输出 3 位)。
 export const SBV_TIME_REGEX = /^\d+:\d{2}:\d{2}\.\d{1,3},\d+:\d{2}:\d{2}\.\d{1,3}$/;
+// 「纯秒」时间行:`0.00 --> 29.98`、`60.00 --> 89.98`、`90 --> 120`(部分语音转写/
+// 剪辑工具导出的 SRT 变体,时间码是裸秒数而非 HH:MM:SS,mmm)。标准时间码含冒号,
+// 此分支不会碰到;尾部允许 VTT 风格 cue settings。
+const BARE_SECONDS_TIME_REGEX = /^\d+(?:\.\d+)?[ \t]+-->[ \t]+\d+(?:\.\d+)?(?:[ \t].*)?$/;
+// 省略毫秒的冒号时间行:`00:30 --> 01:00`(MM:SS)或 `1:00:30 --> 1:01:00`
+// (H:MM:SS)。VTT_SRT_TIME 强制 [,.] 小数位,这类行此前一票都计不上。
+// 与规范时间码互斥(规范行必含逗号/点 + 小数),不会重复计票。
+const COLON_TIME_NO_MS_REGEX = /^(?:\d{1,2}:)?\d{1,2}:\d{2}[ \t]+-->[ \t]+(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[ \t].*)?$/;
 
 // 识别字幕文件的类型
 export const detectSubtitleFormat = (lines: string[]): "ass" | "vtt" | "srt" | "lrc" | "sbv" | "error" => {
@@ -70,6 +78,16 @@ export const detectSubtitleFormat = (lines: string[]): "ass" | "vtt" | "srt" | "
     if (SBV_TIME_REGEX.test(trimmed)) {
       sbvCount++;
     }
+    // 裸秒时间码(0.00 --> 29.98)是 SRT 社区变体,按 srt 计票。
+    // 标准时间码含冒号,不会被这条正则碰上。
+    if (BARE_SECONDS_TIME_REGEX.test(trimmed)) {
+      srtCount++;
+    }
+    // 省略毫秒的冒号时间码(00:30 --> 01:00)同样按 srt 计票;
+    // 与规范行互斥(规范行秒段后必跟逗号/点)。
+    if (COLON_TIME_NO_MS_REGEX.test(trimmed)) {
+      srtCount++;
+    }
   }
 
   // 根据时间行分隔符数量判断。严格多数(>)而非 >=:真 ASS 不含箭头/LRC/SBV
@@ -99,6 +117,67 @@ export const detectSubtitleFormat = (lines: string[]): "ass" | "vtt" | "srt" | "
   return "error";
 };
 
+const pad2 = (n: number): string => String(n).padStart(2, "0");
+
+// 裸秒 token(`0.00` / `89.98` / `120`)→ `HH:MM:SS,mmm`(SRT)或
+// `HH:MM:SS.mmm`(VTT)。小数位右侧补零到 3 位毫秒;超过 3 位截断。
+const bareSecondsTokenToTimecode = (token: string, sep: "," | "."): string => {
+  const dotIdx = token.indexOf(".");
+  const secPart = dotIdx === -1 ? token : token.slice(0, dotIdx);
+  const fracPart = dotIdx === -1 ? "" : token.slice(dotIdx + 1);
+  const totalMs = parseInt(secPart, 10) * 1000 + parseInt(fracPart.padEnd(3, "0").slice(0, 3) || "0", 10);
+  const hh = Math.floor(totalMs / 3_600_000);
+  const mm = Math.floor((totalMs % 3_600_000) / 60_000);
+  const ss = Math.floor((totalMs % 60_000) / 1000);
+  const mmm = totalMs % 1000;
+  return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}${sep}${String(mmm).padStart(3, "0")}`;
+};
+
+// 无毫秒冒号 token(`00:30` / `1:00:30`)→ 标准时间码,小数段补 000。
+// 无法识别(超出两位、含小数点)时返回 null —— 调用方保留原行。
+const colonTokenToTimecode = (token: string, sep: "," | "."): string | null => {
+  const m = token.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = m[1] ? parseInt(m[1], 10) : 0;
+  return `${pad2(hh)}:${pad2(parseInt(m[2], 10))}:${m[3]}${sep}000`;
+};
+
+/**
+ * 把两类非规范但常见的 SRT 时间行就地改写成标准时间码:
+ * - 裸秒:`0.00 --> 29.98`、`90 --> 120`
+ * - 省毫秒:`00:30 --> 01:00`、`1:00:30 --> 1:01:00`
+ *
+ * 必须在 detect 之后、filterSubLines 之前调用 —— 改写后下游所有解析/装配逻辑
+ * (cue 序号识别、ASS 时间转换、in-place 装配)看到的都是规范 SRT,无需第二套
+ * 变体分支;同一份文件里规范 cue 与非规范 cue 混排也逐行各走各的;导出的时间码
+ * 也从「多数播放器不认」升级为标准格式。
+ *
+ * ⚠ 只对 fileType=srt/vtt 调用:ASS 教学字幕的 Dialogue 正文里可能出现形如
+ * `0.00 --> 29.98` 的【讲解文本】(与检测投票防的是同一类劫持),按物理行改写
+ * 会直接篡改台词。与现有时间码信任模型一致:正文行若恰好长成时间码形状,
+ * 规范 SRT 路径本来也会把它当 cue 边界 —— 这里不引入更激进的猜测。
+ */
+export const normalizeSrtVariantTimecodes = (lines: string[], fileType: string): string[] => {
+  if (fileType !== "srt" && fileType !== "vtt") return lines;
+  const sep: "," | "." = fileType === "vtt" ? "." : ",";
+  const toTimecode = (token: string): string | null => {
+    if (/^\d+(?:\.\d+)?$/.test(token)) return bareSecondsTokenToTimecode(token, sep);
+    return colonTokenToTimecode(token, sep);
+  };
+  return lines.map((line) => {
+    const trimmed = line.trim();
+    // 规范时间行(含毫秒小数段,可能带 cue settings)一字不动
+    if (VTT_SRT_TIME.test(trimmed)) return line;
+    if (!BARE_SECONDS_TIME_REGEX.test(trimmed) && !COLON_TIME_NO_MS_REGEX.test(trimmed)) return line;
+    const match = trimmed.match(/^(\S+)[ \t]+-->[ \t]+(\S+)(.*)$/);
+    if (!match) return line;
+    const start = toTimecode(match[1]);
+    const end = toTimecode(match[2]);
+    if (!start || !end) return line;
+    return `${start} --> ${end}${match[3]}`;
+  });
+};
+
 /**
  * 空译文规则的【判据本体】—— 译文为空就回退原文。
  *
@@ -121,7 +200,7 @@ export const detectSubtitleFormat = (lines: string[]): "ass" | "vtt" | "srt" | "
 export const orElseSource = (trans: string, orig: string): string => (trans.trim() === "" ? orig : trans);
 
 /** 逐行套用 {@link orElseSource} 的数组形式。origs 短于 trans 时缺位按空串处理。 */
-export const fillEmptyTranslations = (trans: string[], origs: string[]): string[] => trans.map((t, i) => orElseSource(t, origs[i] ?? ""));
+const fillEmptyTranslations = (trans: string[], origs: string[]): string[] => trans.map((t, i) => orElseSource(t, origs[i] ?? ""));
 
 /**
  * 【共享判据】这一行是否该只输出一半 —— 即它是【软失败回填的原文】。
@@ -142,7 +221,7 @@ export const fillEmptyTranslations = (trans: string[], origs: string[]): string[
 const isSoftFilledHalf = (index: number, softFilled?: ReadonlySet<number>): boolean => softFilled?.has(index) === true;
 
 /** 两半拼接,软填槽位只出一次(判据见 isSoftFilledHalf)。 */
-export const joinBilingualHalves = (allOrig: string, allTrans: string, isOriginalFirst: boolean, joiner: string, isSoftFilled = false): string => {
+const joinBilingualHalves = (allOrig: string, allTrans: string, isOriginalFirst: boolean, joiner: string, isSoftFilled = false): string => {
   if (isSoftFilled) return allOrig;
   return isOriginalFirst ? `${allOrig}${joiner}${allTrans}` : `${allTrans}${joiner}${allOrig}`;
 };
@@ -150,7 +229,7 @@ export const joinBilingualHalves = (allOrig: string, allTrans: string, isOrigina
 export type BilingualFormat = "ass" | "srt";
 
 /** "both" 模式下双语文件名后缀,插在扩展名前避免跟 translatedOnly 同名 */
-export const BILINGUAL_FILENAME_SUFFIX = "_bilingual";
+const BILINGUAL_FILENAME_SUFFIX = "_bilingual";
 
 /**
  * 在文件名扩展名前插入 _bilingual 后缀。
@@ -180,7 +259,7 @@ export const getOutputFileExtension = (fileType: string, bilingualSubtitle: bool
     // 按源文件扩展名回写 .ssa,而不是给 v4.00 内容贴 .ass 名
     return sourceExt === "ssa" ? "ssa" : "ass";
   }
-  // SRT/VTT 双语按用户选择:format=ass 转 ASS,format=srt 输出 SRT(VTT 走 vttToSrt 后处理)
+  // SRT/VTT 双语按用户选择:format=ass 转 ASS,format=srt 输出 SRT(VTT 走 buildVttBilingualSrt)
   if (bilingualSubtitle) {
     return bilingualFormat === "ass" ? "ass" : "srt";
   }
@@ -205,7 +284,7 @@ export const filterSubLines = (lines: string[], fileType: string) => {
 
   // VTT pre-pass:标记 cue identifier 行的 index。WebVTT 规范:cue id 是紧挨 timecode
   // 上方的单行,且其上方为空行(或文件首)。不识别会把它当内容送 LLM 翻译,然后
-  // findTimeLineBefore 还会把它算进上一个 cue 导致双语聚合错位。
+  // findTimeLineIndexBefore 还会把它算进上一个 cue 导致双语聚合错位。
   const cueIdIndices = new Set<number>();
   if (fileType === "vtt") {
     for (let i = 1; i < lines.length; i++) {
@@ -296,7 +375,7 @@ export const filterSubLines = (lines: string[], fileType: string) => {
           }
           // Strip YouTube VTT inline tags — 必须用带类名的形式(<c.colorE5E5E5>
           // 是 YouTube 的标准输出),裸 <c> 正则会留下不成对的开标签污染译文。
-          extractedContent = line.replace(VTT_INLINE_C_TAG, "").replace(VTT_INLINE_TIMESTAMP, "");
+          extractedContent = stripVttInline(line);
         } else {
           isContent = trimmedLine !== "" && !isSeqNumber && !isTimecode;
           extractedContent = line;
@@ -322,10 +401,7 @@ export const filterSubLines = (lines: string[], fileType: string) => {
       if (startExtracting) {
         // 增强 LRC(A2)的逐词时间戳 <mm:ss.xx> 与 VTT 卡拉 OK 时间戳同形同命:
         // 译文词序全变,逐词戳无从还原,送引擎只会被挪位/改写 —— 同 VTT 分支剥掉。
-        extractedContent = trimmedLine
-          .replace(/\[\d{2}:\d{2}(\.\d{2,3})?\]/g, "")
-          .replace(VTT_INLINE_TIMESTAMP, "")
-          .trim();
+        extractedContent = trimmedLine.replace(LRC_TIME_REGEX_GLOBAL, "").replace(VTT_INLINE_TIMESTAMP, "").trim();
         // 只有当去除时间标记后内容不为空时，才认为是有效内容
         // (纯时间标记行如 "[01:23.45]" 是 LRC 的间奏锚点,不应送 LLM 翻译)。
         // 只判非空,不复用 isValidSubtitleLine:它的整数过滤是给 SRT cue 序号
@@ -381,16 +457,10 @@ export const findTimeLineIndexBefore = (lines: string[], index: number, timeRege
   return -1;
 };
 
-/** 从 index 位置向上扫描 lines,找最近的时间码行(trim 后的文本) */
-export const findTimeLineBefore = (lines: string[], index: number, timeRegex?: RegExp): string => {
-  const i = findTimeLineIndexBefore(lines, index, timeRegex);
-  return i === -1 ? "" : lines[i].trim();
-};
-
 // 将 WebVTT 或 SRT 的时间格式 "00:01:32.783" 或 "00:01:32,783" 转换为 ASS 的时间格式 "0:01:32.78"
 // 同时处理有小时和无小时的情况
 const TIME_REGEX = /^(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{1,3})$/;
-export const convertTimeToAss = (time: string): string => {
+const convertTimeToAss = (time: string): string => {
   const match = time.match(TIME_REGEX);
   if (!match) return time;
   const [, hours, minutes, seconds, ms] = match;
@@ -483,6 +553,8 @@ export const buildAssBilingualBody = (
 // VTT 内联标签:<c.classname>、</c>、卡拉 OK 时间戳 <00:00:06.040>
 const VTT_INLINE_C_TAG = /<\/?c\b[^>]*>/gi;
 const VTT_INLINE_TIMESTAMP = /<\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?>/g;
+/** 剥掉 VTT 内联标签 <c.…> 与卡拉 OK 逐词时间戳 —— 引擎会挪位/改写它们,译文里无从还原。 */
+const stripVttInline = (s: string): string => s.replace(VTT_INLINE_C_TAG, "").replace(VTT_INLINE_TIMESTAMP, "");
 
 // VTT 时间码 [H+:]MM:SS.mmm → SRT 时间码 HH:MM:SS,mmm
 const VTT_TIME_REGEX = /^(?:(\d+):)?(\d{2}):(\d{2})\.(\d{1,3})$/;
@@ -502,78 +574,31 @@ const normalizeVttTimeLine = (line: string): string => {
   return `${vttTimeToSrtTime(match[1])} --> ${vttTimeToSrtTime(match[2])}`;
 };
 
+/** 按 cue 聚合的一组内容行:origs / trans 逐行对齐;allSoftFilled 取【与】(cue 内只要有一行真译出来了就照常出双语)。 */
+type CueGroup = { firstIndex: number; indices: number[]; origs: string[]; trans: string[]; allSoftFilled: boolean };
 /**
- * VTT → SRT 文本转换:
- * - 删除 WEBVTT 头(直到第一个空行)
- * - 删除 NOTE / STYLE / REGION 块
- * - 时间码 . → , 并补齐 HH:MM:SS,mmm 格式
- * - 剥离 VTT 特有内联标签 <c>、卡拉 OK 时间戳
- * cue identifier、空行、内容行原样保留
+ * 把内容行按【所属时间码行的行号】聚成 cue(Map 保留插入顺序)。key 用行号而非时间码文本:
+ * 时间码逐字节相同的两个独立 cue 会被文本 key 错误合并(内容跨 cue"传送"、留下空壳)。
+ * 「只出一半」的唯一判据仍是 isSoftFilledHalf(CLAUDE.md),这里只做按 cue 的与聚合。
+ * 曾在 buildVttBilingualSrt 与 assembleSubtitleOutput 的 SRT/VTT/SBV 分支各写一份。
  */
-export const vttToSrt = (vttText: string): string => {
-  const lines = vttText.split(/\r?\n/);
-  const out: string[] = [];
-  let skipUntilBlank = false;
-  let cueNumber = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    // 块边界 = 文件头或上一行为空。NOTE/WEBVTT 只在块边界才是块起始 ——
-    // cue 文本里以 "NOTE " 开头的台词不能被当注释整块删除。
-    const atBlockBoundary = i === 0 || lines[i - 1].trim() === "";
-
-    if (skipUntilBlank) {
-      if (trimmed === "") {
-        skipUntilBlank = false;
-      } else if (VTT_SRT_TIME.test(trimmed)) {
-        // 头/注释块未按规范以空行结束、直接跟 cue(WEBVTT 头后无空行的常见
-        // 手写文件)—— 止损:停止跳过并按时间码处理,否则整个首 cue 被吞。
-        skipUntilBlank = false;
-      } else {
-        continue;
-      }
+const groupCues = (lines: string[], contentIndices: number[], translatedLines: string[], softFilled?: ReadonlySet<number>, timeRegex?: RegExp): Map<number, CueGroup> => {
+  const groups = new Map<number, CueGroup>();
+  contentIndices.forEach((index, i) => {
+    const timeIdx = findTimeLineIndexBefore(lines, index, timeRegex);
+    if (timeIdx === -1) return;
+    const lineSoftFilled = isSoftFilledHalf(i, softFilled);
+    const existing = groups.get(timeIdx);
+    if (existing) {
+      existing.indices.push(index);
+      existing.origs.push(lines[index]);
+      existing.trans.push(translatedLines[i]);
+      existing.allSoftFilled = existing.allSoftFilled && lineSoftFilled;
+    } else {
+      groups.set(timeIdx, { firstIndex: index, indices: [index], origs: [lines[index]], trans: [translatedLines[i]], allSoftFilled: lineSoftFilled });
     }
-
-    // VTT 头(WEBVTT 行,之后 metadata 直到空行)。不限 i===0:HLS 级联段
-    // 会在文件中部再次出现 WEBVTT / X-TIMESTAMP-MAP 头。
-    if (atBlockBoundary && /^WEBVTT(\s|$)/i.test(trimmed)) {
-      skipUntilBlank = true;
-      continue;
-    }
-
-    // NOTE / STYLE / REGION 块整块跳过(到下一个空行;仅块边界起始)
-    if (atBlockBoundary && /^(NOTE|STYLE|REGION)(\s|$)/.test(trimmed)) {
-      skipUntilBlank = true;
-      continue;
-    }
-
-    // 时间码行:SRT 规范要求纯数字序号紧贴时间码上方 —— 丢弃 VTT 的 cue
-    // identifier(具名 id 严格解析器会拒绝,数字 id 会与重编号冲突),统一
-    // 重新编号。id 判定按源侧块结构(上一行非空且再上一行为空/文件头),
-    // 与 filterSubLines 的 cueIdIndices 同一规则 —— 防止把无空行分隔的
-    // 上一 cue 的最后一行内容误删。
-    if (VTT_SRT_TIME.test(trimmed)) {
-      const prevIsCueId = i >= 1 && lines[i - 1].trim() !== "" && !VTT_SRT_TIME.test(lines[i - 1].trim()) && (i - 2 < 0 || lines[i - 2].trim() === "");
-      // pop 前必须确认源侧的 cue id 行真的被【输出】过:若它是被 skipUntilBlank
-      // 吞掉的 NOTE/WEBVTT 行(无空行直接跟时间码的畸形文件),盲 pop 会吃掉
-      // 上一个 cue 的空行分隔符,把两个 cue 在结构上粘连。
-      const strippedPrev = i >= 1 ? lines[i - 1].replace(VTT_INLINE_C_TAG, "").replace(VTT_INLINE_TIMESTAMP, "") : "";
-      if (prevIsCueId && out.length > 0 && out[out.length - 1] === strippedPrev) {
-        out.pop();
-      }
-      cueNumber++;
-      out.push(String(cueNumber));
-      out.push(normalizeVttTimeLine(trimmed));
-      continue;
-    }
-
-    // 内容行 / cue identifier / 空行:剥离 VTT 内联标签后原样保留
-    out.push(line.replace(VTT_INLINE_C_TAG, "").replace(VTT_INLINE_TIMESTAMP, ""));
-  }
-
-  // 清头部空行;合并 3+ 连续空行为 1 个(VTT 块之间可能有多余空行)
-  return out.join("\n").replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n");
+  });
+  return groups;
 };
 
 /**
@@ -586,34 +611,16 @@ export const vttToSrt = (vttText: string): string => {
  * 丢弃 cue settings / WEBVTT / NOTE / cue id、剥 VTT 内联标签、cue 间一个空行)。
  */
 export const buildVttBilingualSrt = (lines: string[], contentIndices: number[], translatedLines: string[], isOriginalFirst: boolean, softFilled?: ReadonlySet<number>): string => {
-  const stripInline = (s: string) => s.replace(VTT_INLINE_C_TAG, "").replace(VTT_INLINE_TIMESTAMP, "");
-  type CueGroup = { timeLine: string; origs: string[]; trans: string[]; allSoftFilled: boolean };
-  // key = 时间码行号(同 generateSubtitle 的双语聚合):时间码文本相同的两个独立 cue 不合并
-  const cueGroups = new Map<number, CueGroup>();
-  contentIndices.forEach((index, i) => {
-    const timeIdx = findTimeLineIndexBefore(lines, index);
-    if (timeIdx === -1) return;
-    const lineSoftFilled = isSoftFilledHalf(i, softFilled);
-    const existing = cueGroups.get(timeIdx);
-    if (existing) {
-      existing.origs.push(lines[index]);
-      existing.trans.push(translatedLines[i]);
-      existing.allSoftFilled = existing.allSoftFilled && lineSoftFilled;
-    } else {
-      cueGroups.set(timeIdx, { timeLine: lines[timeIdx], origs: [lines[index]], trans: [translatedLines[i]], allSoftFilled: lineSoftFilled });
-    }
-  });
-
   let seq = 0;
   const cues: string[] = [];
-  for (const group of cueGroups.values()) {
+  for (const [timeIdx, group] of groupCues(lines, contentIndices, translatedLines, softFilled)) {
     seq += 1;
-    const origs = group.origs.map(stripInline);
+    const origs = group.origs.map(stripVttInline);
     // 空译文回退原文并保持逐行对齐(判据见 orElseSource):空的一半
     // 会在时间轴后紧跟一个空行,而空行是 SRT 的 cue 分隔符 —— 整条 cue 被截断。
-    const trans = fillEmptyTranslations(group.trans.map(stripInline), origs);
+    const trans = fillEmptyTranslations(group.trans.map(stripVttInline), origs);
     const body = joinBilingualHalves(origs.join("\n"), trans.join("\n"), isOriginalFirst, "\n", group.allSoftFilled);
-    cues.push(`${seq}\n${normalizeVttTimeLine(group.timeLine.trim())}\n${body}`);
+    cues.push(`${seq}\n${normalizeVttTimeLine(lines[timeIdx].trim())}\n${body}`);
   }
   // 与 vttToSrt 收尾一致:合并 3+ 连续空行(空译文留下的尾随空行 + cue 间空行)
   return cues.join("\n\n").replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n");
@@ -804,20 +811,12 @@ export const hexToAssColor = (hex: string): string => {
   return `&H00${b}${g}${r}`.toUpperCase();
 };
 
-export const assColorToHex = (ass: string): string => {
-  const m = ass.replace(/&H/i, "").padStart(8, "0");
-  const bb = m.slice(2, 4);
-  const gg = m.slice(4, 6);
-  const rr = m.slice(6, 8);
-  return `#${rr}${gg}${bb}`.toUpperCase();
-};
-
 // 每个文字系统:默认字体 + 它能覆盖的文字系统集合(含自身) + 样式预览的示例句。
 // CJK/复杂文字字体普遍含拉丁字母。
 // ⚠ sample 与 font 必须同表:它俩都按 script 索引,分开放就会漂 —— 已经漂过一次
 // (he 曾并进 arabic 桶,字体没事,预览却给希伯来语用户显示一句阿拉伯语)。
 // 类型是必填字段,新增 script 时编译器会问你要示例句,不会再静默回落到拉丁句。
-export const SCRIPT_INFO: Record<string, { font: string; covers: string[]; sample: string }> = {
+const SCRIPT_INFO: Record<string, { font: string; covers: string[]; sample: string }> = {
   latin: { font: "Arial", covers: ["latin"], sample: "The quick brown fox" },
   hans: { font: "Microsoft YaHei", covers: ["hans", "latin"], sample: "敏捷的棕色狐狸" },
   hant: { font: "Microsoft JhengHei", covers: ["hant", "latin"], sample: "敏捷的棕色狐狸" },
@@ -831,7 +830,7 @@ export const SCRIPT_INFO: Record<string, { font: string; covers: string[]; sampl
 
 
 // 语言码 → 文字系统;未列出(en/fr/ru/…)与 "auto" 一律 latin。
-export const LANG_SCRIPT: Record<string, string> = {
+const LANG_SCRIPT: Record<string, string> = {
   zh: "hans",
   yue: "hans",
   "zh-hant": "hant",
@@ -1182,29 +1181,10 @@ export const assembleSubtitleOutput = (input: {
     // SRT/VTT/SBV 双语 + format=srt:按 cue 聚合,组内"所有原文" + "所有译文",
     // 避免多行 cue 出现"原-译-原-译"交错(逐行替换会留下的副作用)
     if (isBilingual && (fileType === "srt" || fileType === "vtt" || fileType === "sbv")) {
-      // allSoftFilled 取【与】:cue 内只要有一行真译出来了就照常出双语。
-      type CueGroup = { firstIndex: number; origs: string[]; trans: string[]; allSoftFilled: boolean };
-      // key = 时间码行号(非文本):时间码文本相同的两个独立 cue 不能合并
-      // —— 文本 key 会把后面 cue 的内容搬到前面、留下空壳 cue。
-      const cueGroups = new Map<number, CueGroup>();
-
-      contentIndices.forEach((index, i) => {
-        const timeIdx = findTimeLineIndexBefore(lines, index, fileType === "sbv" ? SBV_TIME_REGEX : undefined);
-        if (timeIdx === -1) return;
-
-        const lineSoftFilled = isSoftFilledHalf(i, softFilled);
-        const existing = cueGroups.get(timeIdx);
-        if (existing) {
-          existing.origs.push(lines[index]);
-          existing.trans.push(translatedLines[i]);
-          existing.allSoftFilled = existing.allSoftFilled && lineSoftFilled;
-          outputLines[index] = null; // cue 内非首行,从输出中移除
-        } else {
-          cueGroups.set(timeIdx, { firstIndex: index, origs: [lines[index]], trans: [translatedLines[i]], allSoftFilled: lineSoftFilled });
-        }
-      });
-
+      const cueGroups = groupCues(lines, contentIndices, translatedLines, softFilled, fileType === "sbv" ? SBV_TIME_REGEX : undefined);
       cueGroups.forEach((group) => {
+        // cue 内非首行从输出中移除:内容并进首行的双语体。
+        for (const idx of group.indices.slice(1)) outputLines[idx] = null;
         // 空译文【回退原文】,不是删掉。删掉会让两半行数不等 —— 3 行原文配 2 行
         // 译文,任何按位置配对的下游(校对面板、逐行对照工具)都会把 L2 的译文
         // 读成 T3。共享规则见 fillEmptyTranslations / joinBilingualHalves。
