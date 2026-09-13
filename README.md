@@ -121,29 +121,54 @@ See the [full FAQ in the docs](https://docs.newzone.top/en/guide/translation/sub
 
 ## Command Line
 
-`yarn cli` translates files headlessly over the **same** engine as the web app — same parsers, same retry and rate-limit handling, same cache keys. Configure the service once in the browser, hit **Export settings**, and hand the JSON to the CLI; nothing has to be re-entered.
+`yarn cli` translates files headlessly over the **same** engine as the web app — same parsers, same retry and rate-limit handling, same cache keys. Configure the service once in the browser, hit **Export settings**, and hand the JSON to the CLI: keys, prompts, glossary and retry settings all carry over.
+
+### Point it at a folder
+
+`-i` takes a **directory** as well as a file, and scans it recursively. Every translation lands **next to the subtitle it came from**, so a whole season keeps its folder structure:
 
 ```bash
 yarn install   # once
 
-# A whole season into Chinese on the free GTX API — no key, no config.
-yarn cli -i s01e01.srt -i s01e02.srt -t zh
+# A whole season, translated in place: season/s01/e01.srt -> season/s01/e01.zh.srt
+yarn cli -i ./season -t zh
 
-# Two targets in one pass, bilingual, using your exported keys/prompts/glossary.
-yarn cli -i movie.srt -t zh -t ja --bilingual -s ~/subtitle-settings.json -o out/
+# Driven by your exported web settings; two targets + bilingual in one pass.
+yarn cli -i ./season -t zh -t ja --bilingual -s ~/subtitle-settings.json
 
 # A local model — nothing leaves the machine.
-yarn cli -i movie.ass -t zh -m llm --url http://localhost:11434/v1 --model qwen3
-
-# One-off override on top of a settings file.
-yarn cli -i movie.vtt -t de -m deepseek --api-key sk-xxx
+yarn cli -i ./season -t zh -m llm --url http://localhost:11434/v1 --model qwen3
 ```
+
+The scan skips dot-prefixed files and directories (`.git`, `.DS_Store`), so pointing it at a project root is safe.
+
+### Re-running never redoes work
+
+The whole pipeline is built to be interrupted and resumed:
+
+- **Each file is written to disk the moment it finishes.** `Ctrl-C` halfway through leaves the completed episodes on disk — you never lose work you already paid for.
+- **Re-running skips whatever is already done**, via two gates:
+  - the output already exists (`movie.zh.srt` sits next to `movie.srt`) → the file is **skipped**, logged as `skipped (already translated)`;
+  - files whose names say they are translations (`movie.zh.srt`, `movie.zh_bilingual.ass`) are **never taken as input**, so `movie.zh.zh.srt` can't happen.
+- **A line-level cache** (`~/.translate-cli-cache.json`) covers the rest: if one file died mid-way, a re-run only pays for the missing lines.
+
+So the normal workflow is: just run it. Stop whenever you like, run it again later.
+
+To **deliberately redo** finished work, use `--overwrite`:
+
+```bash
+# After switching models or editing the glossary, redo one episode.
+yarn cli -i ./season/s01e01.srt -t zh --overwrite
+```
+
+> Point `--overwrite` at a **file**, not a whole folder. Against a folder, the existing `*.zh.srt` files are themselves inputs, and the "output would overwrite an input" guard refuses to clobber them (that guard is deliberate).
 
 Output lands beside the input (or in `-o <dir>`) as `movie.zh.srt`. Bilingual runs add `_bilingual`, and for `.srt` / `.vtt` sources they default to ASS with separate styles per line — `movie.zh_bilingual.ass`. Pass `--bilingual-format srt` to stay in SRT.
 
 | Option                                                        | Meaning |
 | ------------------------------------------------------------- | --- |
-| `-i, --input <file>`                                          | Input file. Repeatable. |
+| `-i, --input <file\|dir>`                                    | Input **file or directory** (scanned recursively). Repeatable. |
+| `--overwrite`                                                 | Redo work that already looks done (an existing `<stem>.<lang>.<ext>`, or a name that says it is a translation). Off by default. |
 | `-t, --to <lang>`                                             | Target language. Repeatable. Default `zh`. |
 | `-f, --from <lang>`                                           | Source language. Default `auto`. |
 | `-m, --method <id>`                                           | Service id. Default `gtxFreeAPI`; `--list-methods` prints them all. |
@@ -158,22 +183,41 @@ Output lands beside the input (or in `-o <dir>`) as `movie.zh.srt`. Bilingual ru
 
 Subtitles are not the only input: the same command handles Markdown (`.md`, `.markdown`, `.mdx` — code blocks, links and LaTeX protected by default) and JSON locale files (`.json` — keys untouched, values translated). `yarn cli --list-formats` prints the mapping, `yarn cli --help` the full option list including the Markdown-specific flags.
 
-Runs are resumable: every translated line is cached, so re-running after a `Ctrl-C`, a rate-limit wall, or a handful of failed lines only pays for what is still missing.
+Exit codes: `0` everything translated (including "there was nothing left to do") · `1` finished but some lines soft-failed (kept as source text in the output) or a file failed · `2` bad invocation · `130` cancelled.
 
-Exit codes: `0` everything translated · `1` finished but some lines soft-failed (kept as source text in the output) or a file failed · `2` bad invocation · `130` cancelled.
+### On Windows
+
+From the project directory in PowerShell:
+
+```powershell
+yarn install                    # once
+yarn cli -i "D:\anime\Season 1" -t zh
+```
+
+- **Quote paths with spaces or non-ASCII characters** (`-i "D:\My Season 1"`), or PowerShell splits them into several arguments.
+- **Export your settings from the web UI once**: configure the service (key, prompts, glossary) in the browser, hit **Export settings**, save it as `settings.json`, then pass `-s D:\path\settings.json` on every run.
+- **Long jobs are safe to stop**: `Ctrl-C` mid-season keeps what is finished, and the next identical command picks up where it left off.
+- **No key needed to try it**: omit `-m` and the free GTX endpoint is the default (rate-limited); adding `-s` routes through the service you configured instead.
 
 ## Run It Yourself
 
 Node.js >= 20.9.0 and Yarn (or npm / pnpm).
 
 ```bash
-git clone https://github.com/rockbenben/subtitle-translator.git
+git clone https://github.com/Ray4AI/subtitle-translator.git
 cd subtitle-translator
 
 yarn install
 yarn dev        # http://localhost:3000
 yarn build      # production build
+yarn test       # unit + CLI end-to-end tests (vitest)
 ```
+
+`yarn test` covers the engine-adjacent logic, including a real end-to-end run of
+`scripts/cli.ts` against a temporary subtitle tree — it asserts that translations
+land beside their source files, that re-running is a no-op, and that an existing
+translation is never overwritten. It talks to the free GTX endpoint once per run
+and then serves everything from cache.
 
 ### Docker
 

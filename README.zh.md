@@ -120,29 +120,54 @@ LLM 模式可在每一批请求里携带前后文，提升对话连贯性和角�
 
 ## 命令行
 
-`yarn cli` 在终端里跑的是**同一套**引擎——同样的解析器、同样的重试与限流处理、同样的缓存键。在浏览器里配好服务后点「导出设置」，把那份 JSON 交给 CLI 即可，无需重填任何配置。
+`yarn cli` 在终端里跑的是**同一套**引擎——同样的解析器、同样的重试与限流处理、同样的缓存键。**在浏览器里配好服务后点「导出设置」，把那份 JSON 交给 CLI 即可**，密钥、提示词、术语表、重试参数都不用重填。
+
+### 直接传一个文件夹
+
+`-i` 除了文件也接受**文件夹**，会递归扫描。每一份译文都**落在它来源字幕的同一个目录里**，整季的目录结构原样保留：
 
 ```bash
 yarn install   # 只需一次
 
-# 整季翻成中文，走免费 GTX，无需 key、无需配置
-yarn cli -i s01e01.srt -i s01e02.srt -t zh
+# 整季就地翻译:season/s01/e01.srt -> season/s01/e01.zh.srt
+yarn cli -i ./season -t zh
 
-# 一次两种目标语言 + 双语字幕，复用导出的 key / 提示词 / 术语表
-yarn cli -i movie.srt -t zh -t ja --bilingual -s ~/subtitle-settings.json -o out/
+# 用你网页端导出的 key / 提示词 / 术语表驱动;一次出两种目标语言 + 双语
+yarn cli -i ./season -t zh -t ja --bilingual -s ~/subtitle-settings.json
 
-# 本地模型，数据不出本机
-yarn cli -i movie.ass -t zh -m llm --url http://localhost:11434/v1 --model qwen3
-
-# 在设置文件基础上临时覆盖
-yarn cli -i movie.vtt -t de -m deepseek --api-key sk-xxx
+# 本地模型,数据不出本机
+yarn cli -i ./season -t zh -m llm --url http://localhost:11434/v1 --model qwen3
 ```
+
+扫描会跳过点开头的文件和目录（`.git`、`.DS_Store` 之类），所以直接指向项目根目录也是安全的。
+
+### 重复运行不会重复干活
+
+整套流程是按**随时可中断、可续跑**设计的：
+
+- **每译完一个文件就立刻写盘。** 翻译到一半 `Ctrl-C`，已经完成的集数就留在磁盘上——不会丢掉你已经付过费的成果。
+- **再跑一次会自动跳过做过的部分。** 两道闸：
+  - 产物已经存在（`movie.srt` 对应的 `movie.zh.srt` 在）→ **重译直接跳过**，日志报 `skipped (already translated)`；
+  - 长得像上次产物的文件（`movie.zh.srt`、`movie.zh_bilingual.ass`）**不会被当成输入**，所以永远不会产出 `movie.zh.zh.srt`。
+- **行级缓存**（`~/.translate-cli-cache.json`）兜住剩下那种情况：某个文件翻到一半失败，重跑只补缺失的行，已经成功的行不会重新请求。
+
+所以日常用法就是：跑就是了，想停就 `Ctrl-C`，之后再跑一次。
+
+要**故意重做**已经完成的活，用 `--overwrite`：
+
+```bash
+# 换了模型或改完术语表之后,重译某一集
+yarn cli -i ./season/s01e01.srt -t zh --overwrite
+```
+
+> `--overwrite` 请指向**文件**，不要指向整个文件夹。指向文件夹时，已存在的 `*.zh.srt` 也会被当成输入，「输出会覆盖本轮输入」这道守卫会拒绝改写原件（这是有意的保护）。
 
 产物默认写在输入文件旁边（或 `-o <dir>`），命名为 `movie.zh.srt`。双语会追加 `_bilingual`；`.srt` / `.vtt` 源的双语默认导出为原文、译文分样式的 ASS（`movie.zh_bilingual.ass`），加 `--bilingual-format srt` 可保持 SRT。
 
 | 选项                                                          | 说明 |
 | ------------------------------------------------------------- | --- |
-| `-i, --input <file>`                                           | 输入文件，可重复 |
+| `-i, --input <file\|dir>`                                    | 输入**文件或文件夹**（文件夹递归扫描），可重复 |
+| `--overwrite`                                                 | 重做已经完成的活（已存在的 `<stem>.<lang>.<ext>`，以及名字像译文的文件）。默认关闭 |
 | `-t, --to <lang>`                                              | 目标语言，可重复，默认 `zh` |
 | `-f, --from <lang>`                                            | 源语言，默认 `auto` |
 | `-m, --method <id>`                                            | 翻译服务，默认 `gtxFreeAPI`；`--list-methods` 列出全部 |
@@ -157,22 +182,39 @@ yarn cli -i movie.vtt -t de -m deepseek --api-key sk-xxx
 
 不止字幕：同一条命令也处理 Markdown（`.md`、`.markdown`、`.mdx`，默认保护代码块、链接与 LaTeX）和 JSON 多语言文件（`.json`，只译值不动键）。`yarn cli --list-formats` 查看格式映射，`yarn cli --help` 查看完整选项（含 Markdown 专属开关）。
 
-翻译可续跑：每一行译文都进缓存，`Ctrl-C` 中断、撞上限流、或只有少数几行失败后再跑一次，只会为还缺的那部分付费。
+退出码：`0` 全部译完（含"本来就都译过了，什么都没做"）· `1` 跑完但有行软失败（输出里保留原文）或有文件失败 · `2` 参数错误 · `130` 已取消。
 
-退出码：`0` 全部译完 · `1` 跑完但有行软失败（输出里保留原文）或有文件失败 · `2` 参数错误 · `130` 已取消。
+### Windows 上自己用
+
+在项目目录里开 PowerShell：
+
+```powershell
+yarn install                    # 只需一次
+yarn cli -i "D:\番剧\进击的巨人 S01" -t zh
+```
+
+- **路径带空格或中文一定要加引号**（`-i "D:\My Season 1"`），否则 PowerShell 会把它拆成多个参数。
+- **先用网页端导出设置**：在浏览器里配好服务（key、提示词、术语表），点「导出设置」存成 `settings.json`，之后每次加 `-s D:\path\settings.json` 即可，不用再进网页。
+- **长时间任务**：整季跑起来后可以随时 `Ctrl-C`，已完成的部分留在原地；下次跑同一条命令会跳过它们继续。
+- **想全程免密钥试用**：不加 `-m` 默认走免费 GTX（有限流）；配上 `-s` 后走你自己配的服务更稳。
 
 ## 自行部署
 
 需要 Node.js >= 20.9.0 与 Yarn（或 npm / pnpm）。
 
 ```bash
-git clone https://github.com/rockbenben/subtitle-translator.git
+git clone https://github.com/Ray4AI/subtitle-translator.git
 cd subtitle-translator
 
 yarn install
 yarn dev        # http://localhost:3000
 yarn build      # 构建生产版本
+yarn test       # 单元测试 + CLI 端到端测试(vitest)
 ```
+
+`yarn test` 覆盖引擎周边的逻辑,其中包含**真跑一遍 `scripts/cli.ts`** 的端到端用例:
+在临时目录里造一棵字幕树,断言译文落在源文件旁边、重跑是空操作、以及**已存在的
+译文绝不会被覆盖**。它每次运行只会打一次免费的 GTX 接口,之后全走缓存。
 
 ### Docker
 

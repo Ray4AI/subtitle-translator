@@ -1,27 +1,39 @@
 // Translate CLI — headless batch translation over the same engine
 // (lib/translation/pipeline) and the same per-format parsing/assembly the web
-// tools use. Configure in the web UI, export settings, point this at files:
+// tools use. Configure in the web UI, export settings, point this at files or
+// folders:
 //
-//   yarn cli -i movie.srt -t zh -s my-settings.json
+//   yarn cli -i ./season -t zh -s my-settings.json     # a whole folder, in place
+//   yarn cli -i movie.srt -t zh -t ja --bilingual
 //   yarn cli -i README.md -t ja -t ko -o out/
 //   yarn cli -i locale.json -t zh -m llm --url http://localhost:11434/v1 --model qwen3
+//
+// A directory argument is scanned recursively (see lib/translation/cliInputs.ts)
+// and every translation is written next to the subtitle it came from — the
+// `outDir = dirname(inputPath)` default below already does that, so the folder
+// path needs no extra machinery here.
+//
+// Runs are interruptible and resumable: each file is written as soon as it is
+// translated, and a re-run skips (a) files whose output already exists and
+// (b) names that look like this run's own output. --overwrite turns both off.
 //
 // Formats (subtitle / markdown / json) are built in — the handlers live in
 // lib/translation/cliFormat.ts (statically imported; every checkout, including
 // single-tool sub-projects, ships all three). Format is inferred from the
 // extension; override with --format.
 //
-// Exit codes: 0 = every item translated; 1 = finished with soft-failed items
-// (kept as source text in the output) or a failed file; 2 = bad invocation;
-// 130 = cancelled.
+// Exit codes: 0 = every item translated (including "nothing left to do");
+// 1 = finished with soft-failed items (kept as source text in the output) or a
+// failed file; 2 = bad invocation; 130 = cancelled.
 
 import { parseArgs } from "node:util";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 import { buildRuntimeConfig, translateLines, type PipelineCache, type PipelineRuntimeConfig, type PipelineOutcome, type TranslateBatchMeta } from "../src/app/lib/translation/pipeline";
 import { CliFileFormatError, CLI_FORMAT_HANDLERS, triState, type CliFormatContext } from "../src/app/lib/translation/cliFormat";
+import { resolveCliInputs, formatInputWarning, producedOutputExists } from "../src/app/lib/translation/cliInputs";
 import { appendBilingualSuffix } from "../src/app/lib/translation/formats/subtitle";
 import { getDefaultConfig, defaultConfigs, LLM_MODELS } from "../src/app/lib/translation/registry";
 import { isValidLanguageValue } from "../src/app/lib/translation/utils";
@@ -38,10 +50,14 @@ import { formatErrorWithCause, isCascadedAbort } from "../src/app/utils/errorUti
 
 const HELP = `translate CLI
 
-Usage: yarn cli -i <file> [-i <file>...] [options]
+Usage: yarn cli -i <file|dir> [-i <file|dir>...] [options]
 
 Options:
-  -i, --input <file>        Input file. Repeatable.
+  -i, --input <file|dir>    Input file OR directory (scanned recursively). Repeatable.
+                            A directory keeps every translation next to its source file.
+      --overwrite           Redo work that already looks done: overwrite an existing
+                            <stem>.<lang>.<ext>, and translate files whose names say they
+                            are already translations. OFF by default — re-running is a no-op.
   -t, --to <lang>           Target language code. Repeatable. Default: settings file, else zh.
   -f, --from <lang>         Source language. Default: settings file, else auto.
   -m, --method <method>     Translation service. Default: settings file, else gtxFreeAPI.
@@ -60,7 +76,7 @@ Options:
       --list-methods        Print available translation methods and exit.
   -h, --help                Show this help.
 
-Subtitle files:
+Subtitle files (and every other format):
       --bilingual           Bilingual output (default: translated only).
       --original-first      Original above/before the translation in bilingual output.
       --bilingual-format <ass|srt>  Bilingual format for srt/vtt sources. Default: ass.
@@ -110,6 +126,7 @@ const parseCliArgs = () =>
       "cache-file": { type: "string" },
       "list-formats": { type: "boolean" },
       "list-methods": { type: "boolean" },
+      overwrite: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   }).values;
@@ -603,7 +620,30 @@ const main = async (): Promise<number> => {
   // (响亮);不敏感卷上漏检 → 静默覆盖(无声)。选前者。
   // pathKey 现在是模块级 helper(目标语言去重也要用它,而那段代码在这之前)。
   // 精确重复(`-i a.srt -i a.srt`)静默去掉 —— 那是用户的笔误,合并没有信息损失。
-  const exactUniqueInputs = [...new Set(args.input.map((p) => resolve(p)))];
+  // 输入解析(文件 / **目录**)。
+  //
+  // 目录展开是"整季一次译完"这个产品承诺在命令行上的形态:用户在网页里习惯
+  // 拖进一整个文件夹,CLI 原先只能逐个 -i,而目录参数会掉进 byExt 查不到扩展名
+  // 的分支,报一句 "cannot infer format from the extension"。
+  //
+  // 【译文回到源文件同目录】不需要任何新逻辑:下面循环里
+  // `outDir = args["out-dir"] ? … : dirname(inputPath)`,展开后的每个文件都带着
+  // 自己的 dirname,所以 season1/s01e01.srt → season1/s01e01.zh.srt。
+  //
+  // 用 rawTargets(用户写的全部目标语言)而【不是】targets(源=目标被剔除后的
+  // 那份):"上次产物"识别只看文件名,与"这次会不会真翻"无关。用 targets 的话
+  // `-f en -t en -t zh` 里 en 被剔掉,已有的 *.en.srt 就不再被认作产物,
+  // 会被当源文件翻一遍。
+  const resolved = resolveCliInputs(args.input, {
+    skipPriorTranslations: args.overwrite !== true,
+    targetLanguages: rawTargets,
+  });
+  for (const w of resolved.warnings) console.error(`warning: ${formatInputWarning(w)}`);
+
+  // 精确重复(`-i a.srt -i a.srt`)静默去掉 —— 那是用户的笔误,合并没有信息损失。
+  // 目录展开会把同一文件从多条路径**反复**产出(`-i season -i season/s01e01.srt`),
+  // 上面的 dedupe 正好一并吃掉。
+  const exactUniqueInputs = [...new Set(resolved.inputs.map((i) => i.path))];
   const inputs = [...new Map(exactUniqueInputs.map((p) => [pathKey(p), p] as const)).values()];
   // 【仅大小写不同】的输入被折叠掉时说一声 —— warning,不是 error。
   //
@@ -703,6 +743,32 @@ const main = async (): Promise<number> => {
       if (collidingInput) {
         console.error(`✖ ${fileName} → ${lang}: would write over ${basename(collidingInput)}, which is one of this run's inputs — refusing. Use -o to write elsewhere, or narrow the input glob (e.g. exclude *.${lang}.*).`);
         hardFailures++;
+        continue;
+      }
+      // 【本轮产物已存在 → 直接跳过,不翻】。
+      //
+      // 这是"中断/重跑不重复干活"的最后一道闸,补的是另外两道闸都盖不住的那一种:
+      //  ① 目录扫描的产物过滤器(cliInputs)只看【被扫描到的文件名】—— 它挡的是
+      //     "把 a.zh.srt 当输入再产出 a.zh.zh.srt";对"a.srt 的产物 a.zh.srt 已经
+      //     存在"这件事一无所知(那份产物不在输入列表里)。
+      //  ② 翻译缓存挡的是"同样的文本不重复请求",但它不阻止【写出】—— 命中缓存
+      //     时依旧会把文件重新组装、覆盖回磁盘。
+      // 于是 --no-cache(或缓存被 purge、换 provider)时重跑一遍目录,会把一份
+      // 【已经译好】的 a.zh.srt 用"本轮翻译结果"覆盖掉。而失败行是软失败(保留
+      // 原文)—— 一次临时性的限流就能把一份好译文换成半份原文,且 exit code 只报
+      // 1,用户很难注意到。
+      //
+      // 判据是【扩展名归一化之后】的最终路径,所以 srt 输入产出 .ass(双语)也认得。
+      // 精确的文件名要等 handler 跑完才知道(扩展名由内容决定),这里用与上面的
+      // collidingInput 同一套前缀判据预测产出形状:
+      //   普通  stem.lang.<ext>            双语  stem.lang_bilingual.<ext>
+      // 两者都以 `${stem}.${lang}` 打头,所以扫一遍 outDir 即可。
+      //
+      // ⚠ 必须在 handler.run 【之前】判:放在写之前的话,整份文件已经翻完(--no-cache
+      // 时是真实计费)才被丢弃,用户白等一轮还白花钱。
+      // --overwrite 关掉这道闸(用户显式要求重做)。
+      if (args.overwrite !== true && existsSync(outDir) && producedOutputExists(outDir, stem, lang)) {
+        process.stderr.write(`${fileName} → ${lang}: skipped (already translated)\n`);
         continue;
       }
       process.stderr.write(`${fileName} → ${lang} (${handler.id}, ${method})\n`);
